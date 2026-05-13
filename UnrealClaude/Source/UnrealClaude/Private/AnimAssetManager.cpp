@@ -4,6 +4,8 @@
 #include "AnimStateMachineEditor.h"
 #include "AnimGraphEditor.h"
 #include "AnimGraphNode_StateMachine.h"
+#include "AnimGraphNode_Slot.h"
+#include "AnimGraphNode_IdentityPose.h"
 #include "AnimStateNode.h"
 #include "Animation/AnimSequence.h"
 #include "Animation/BlendSpace.h"
@@ -12,7 +14,136 @@
 #include "Animation/Skeleton.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "EdGraph/EdGraph.h"
+#include "EdGraph/EdGraphPin.h"
+#include "EdGraphSchema_K2.h"
+#include "K2Node_VariableGet.h"
 #include "UObject/UObjectGlobals.h"
+
+namespace
+{
+	/**
+	 * Resolve a Blueprint variable by name across the generated and skeleton classes.
+	 * Returns nullptr if not found; callers use this for both pre-flight checks and
+	 * inside BindBlendSpaceAxisToVariable so the lookup is consistent.
+	 */
+	FProperty* FindAnimBlueprintVariable(UAnimBlueprint* AnimBP, const FString& VariableName)
+	{
+		if (!AnimBP || VariableName.IsEmpty())
+		{
+			return nullptr;
+		}
+		FProperty* Property = FindFProperty<FProperty>(AnimBP->GeneratedClass, *VariableName);
+		if (!Property)
+		{
+			Property = FindFProperty<FProperty>(AnimBP->SkeletonGeneratedClass, *VariableName);
+		}
+		return Property;
+	}
+
+	/**
+	 * Confirm every non-empty binding value resolves to a real Blueprint variable
+	 * before any destructive graph edits. Stops at the first failure so the user
+	 * sees the offending name in the error.
+	 */
+	template<typename TBindings>
+	bool ValidateBindingVariables(UAnimBlueprint* AnimBP, const TBindings& Bindings, FString& OutError)
+	{
+		for (const auto& Pair : Bindings)
+		{
+			const FString& VarName = Pair.Value;
+			if (VarName.IsEmpty())
+			{
+				continue;
+			}
+			if (!FindAnimBlueprintVariable(AnimBP, VarName))
+			{
+				OutError = FString::Printf(
+					TEXT("Variable '%s' not found in AnimBlueprint"), *VarName);
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * Create a Get-Variable node for the given AnimBP variable and connect its
+	 * output to the named input pin on an existing BlendSpace player node.
+	 */
+	bool BindBlendSpaceAxisToVariable(
+		UAnimBlueprint* AnimBP,
+		UEdGraph* StateGraph,
+		UEdGraphNode* BSNode,
+		const FName& AxisPinName,
+		const FString& VariableName,
+		FString& OutError)
+	{
+		if (!AnimBP || !StateGraph || !BSNode)
+		{
+			OutError = TEXT("Invalid AnimBlueprint, state graph, or BlendSpace node");
+			return false;
+		}
+
+		if (VariableName.IsEmpty())
+		{
+			OutError = TEXT("Variable name is empty");
+			return false;
+		}
+
+		if (!FindAnimBlueprintVariable(AnimBP, VariableName))
+		{
+			OutError = FString::Printf(
+				TEXT("Variable '%s' not found in AnimBlueprint"), *VariableName);
+			return false;
+		}
+
+		UEdGraphPin* AxisPin = FAnimGraphEditor::FindPinByName(BSNode, AxisPinName.ToString(), EGPD_Input);
+		if (!AxisPin)
+		{
+			OutError = FString::Printf(
+				TEXT("BlendSpace input pin '%s' not found (BlendSpace asset may not expose this axis)"),
+				*AxisPinName.ToString());
+			return false;
+		}
+
+		UK2Node_VariableGet* VarNode = NewObject<UK2Node_VariableGet>(StateGraph);
+		if (!VarNode)
+		{
+			OutError = TEXT("Failed to create variable get node");
+			return false;
+		}
+
+		VarNode->VariableReference.SetSelfMember(FName(*VariableName));
+		VarNode->NodePosX = BSNode->NodePosX - 200;
+		VarNode->NodePosY = BSNode->NodePosY + (AxisPinName == FName(TEXT("Y")) ? 80 : 0);
+
+		StateGraph->AddNode(VarNode, false, false);
+		VarNode->CreateNewGuid();
+		VarNode->ReconstructNode();
+
+		FString GetVarNodeId = FAnimGraphEditor::GenerateAnimNodeId(TEXT("GetVar"), VariableName, StateGraph);
+		FAnimGraphEditor::SetNodeId(VarNode, GetVarNodeId);
+
+		UEdGraphPin* VarOutputPin = nullptr;
+		for (UEdGraphPin* Pin : VarNode->Pins)
+		{
+			if (Pin && Pin->Direction == EGPD_Output && Pin->PinName != UEdGraphSchema_K2::PN_Self)
+			{
+				VarOutputPin = Pin;
+				break;
+			}
+		}
+
+		if (!VarOutputPin)
+		{
+			OutError = FString::Printf(
+				TEXT("Variable get node for '%s' has no output pin"), *VariableName);
+			return false;
+		}
+
+		VarOutputPin->MakeLinkTo(AxisPin);
+		return true;
+	}
+}
 
 // ===== Asset Loading =====
 
@@ -149,6 +280,11 @@ bool FAnimAssetManager::SetStateBlendSpace(
 		return false;
 	}
 
+	if (!ValidateBindingVariables(AnimBP, ParameterBindings, OutError))
+	{
+		return false;
+	}
+
 	UEdGraph* StateGraph = FAnimGraphEditor::FindStateBoundGraph(AnimBP, StateMachineName, StateName, OutError);
 	if (!StateGraph)
 	{
@@ -174,9 +310,17 @@ bool FAnimAssetManager::SetStateBlendSpace(
 		return false;
 	}
 
-	// TODO: Bind parameters to variables
-	// This requires creating variable get nodes and connecting them to the BlendSpace input pins
-	// For now, we'll just create the BlendSpace node and connect to output
+	for (const TPair<FString, FString>& Binding : ParameterBindings)
+	{
+		if (Binding.Value.IsEmpty())
+		{
+			continue;
+		}
+		if (!BindBlendSpaceAxisToVariable(AnimBP, StateGraph, BSNode, FName(*Binding.Key), Binding.Value, OutError))
+		{
+			return false;
+		}
+	}
 
 	return FAnimGraphEditor::ConnectToOutputPose(StateGraph, NodeId, OutError);
 }
@@ -191,6 +335,13 @@ bool FAnimAssetManager::SetStateBlendSpace1D(
 {
 	if (!ValidateAnimationCompatibility(AnimBP, BlendSpace, OutError))
 	{
+		return false;
+	}
+
+	if (!ParameterBinding.IsEmpty() && !FindAnimBlueprintVariable(AnimBP, ParameterBinding))
+	{
+		OutError = FString::Printf(
+			TEXT("Variable '%s' not found in AnimBlueprint"), *ParameterBinding);
 		return false;
 	}
 
@@ -219,6 +370,14 @@ bool FAnimAssetManager::SetStateBlendSpace1D(
 		return false;
 	}
 
+	if (!ParameterBinding.IsEmpty())
+	{
+		if (!BindBlendSpaceAxisToVariable(AnimBP, StateGraph, BSNode, FName(TEXT("X")), ParameterBinding, OutError))
+		{
+			return false;
+		}
+	}
+
 	return FAnimGraphEditor::ConnectToOutputPose(StateGraph, NodeId, OutError);
 }
 
@@ -240,12 +399,64 @@ bool FAnimAssetManager::SetStateMontage(
 		return false;
 	}
 
-	// For montage, we typically don't replace the state graph
-	// Instead, montages are played via AnimInstance->Montage_Play()
-	// But we can set up a montage slot node if needed
+	// State graphs play montages through a Slot node — the slot acts as a passthru of the Source
+	// pose until a Montage_Play targets this slot, at which point the slot's contribution overrides
+	// the source. We feed Source from an Identity Pose so the state has a stable base when idle.
+	FName SlotName = (Montage->SlotAnimTracks.Num() > 0)
+		? Montage->SlotAnimTracks[0].SlotName
+		: FAnimSlotGroup::DefaultSlotName;
 
-	OutError = TEXT("Montage assignment to states not yet implemented. Use PlayMontage via AnimInstance.");
-	return false;
+	if (!FAnimGraphEditor::ClearStateGraph(StateGraph, OutError))
+	{
+		return false;
+	}
+
+	FGraphNodeCreator<UAnimGraphNode_IdentityPose> IdentityCreator(*StateGraph);
+	UAnimGraphNode_IdentityPose* IdentityNode = IdentityCreator.CreateNode();
+	if (!IdentityNode)
+	{
+		OutError = TEXT("Failed to create identity pose node");
+		return false;
+	}
+	IdentityNode->NodePosX = 0;
+	IdentityNode->NodePosY = 100;
+	IdentityCreator.Finalize();
+	FString IdentityNodeId = FAnimGraphEditor::GenerateAnimNodeId(TEXT("Identity"), Montage->GetName(), StateGraph);
+	FAnimGraphEditor::SetNodeId(IdentityNode, IdentityNodeId);
+
+	FGraphNodeCreator<UAnimGraphNode_Slot> SlotCreator(*StateGraph);
+	UAnimGraphNode_Slot* SlotNode = SlotCreator.CreateNode();
+	if (!SlotNode)
+	{
+		OutError = TEXT("Failed to create slot node");
+		return false;
+	}
+	SlotNode->NodePosX = 200;
+	SlotNode->NodePosY = 100;
+	SlotNode->Node.SlotName = SlotName;
+	SlotCreator.Finalize();
+	FString SlotNodeId = FAnimGraphEditor::GenerateAnimNodeId(TEXT("Slot"), SlotName.ToString(), StateGraph);
+	FAnimGraphEditor::SetNodeId(SlotNode, SlotNodeId);
+
+	UEdGraphPin* IdentityOutPin = nullptr;
+	for (UEdGraphPin* Pin : IdentityNode->Pins)
+	{
+		if (Pin && Pin->Direction == EGPD_Output)
+		{
+			IdentityOutPin = Pin;
+			break;
+		}
+	}
+
+	UEdGraphPin* SlotSourcePin = FAnimGraphEditor::FindPinByName(SlotNode, TEXT("Source"), EGPD_Input);
+	if (IdentityOutPin && SlotSourcePin)
+	{
+		IdentityOutPin->MakeLinkTo(SlotSourcePin);
+	}
+
+	StateGraph->Modify();
+
+	return FAnimGraphEditor::ConnectToOutputPose(StateGraph, SlotNodeId, OutError);
 }
 
 // ===== Asset Discovery =====
