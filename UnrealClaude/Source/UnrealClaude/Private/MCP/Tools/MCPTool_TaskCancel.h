@@ -48,7 +48,6 @@ public:
 			return FMCPToolResult::Error(TEXT("Task queue not initialized"));
 		}
 
-		// Extract task ID
 		FString TaskIdString;
 		TOptional<FMCPToolResult> Error;
 		if (!ExtractRequiredString(Params, TEXT("task_id"), TaskIdString, Error))
@@ -56,14 +55,12 @@ public:
 			return Error.GetValue();
 		}
 
-		// Parse GUID
 		FGuid TaskId;
 		if (!FGuid::Parse(TaskIdString, TaskId))
 		{
 			return FMCPToolResult::Error(TEXT("Invalid task_id format"));
 		}
 
-		// Try to cancel
 		if (TaskQueue->CancelTask(TaskId))
 		{
 			TSharedPtr<FJsonObject> ResultData = MakeShared<FJsonObject>();
@@ -76,7 +73,7 @@ public:
 		}
 		else
 		{
-			// Check why it failed
+			// Failure reason depends on whether the task exists at all
 			TSharedPtr<FMCPAsyncTask> Task = TaskQueue->GetTask(TaskId);
 			if (!Task.IsValid())
 			{

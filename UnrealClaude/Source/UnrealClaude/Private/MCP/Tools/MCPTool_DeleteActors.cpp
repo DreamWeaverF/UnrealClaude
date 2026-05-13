@@ -10,30 +10,25 @@
 
 FMCPToolResult FMCPTool_DeleteActors::Execute(const TSharedRef<FJsonObject>& Params)
 {
-	// Validate editor context using base class
 	UWorld* World = nullptr;
 	if (auto Error = ValidateEditorContext(World))
 	{
 		return Error.GetValue();
 	}
 
-	// Collect actors to delete
 	TArray<AActor*> ActorsToDelete;
 	TArray<FString> DeletedNames;
 	TArray<FString> NotFoundNames;
 	FString ValidationError;
 
-	// Check for single actor_name
 	FString SingleActorName;
 	if (Params->TryGetStringField(TEXT("actor_name"), SingleActorName))
 	{
-		// Validate actor name
 		if (!FMCPParamValidator::ValidateActorName(SingleActorName, ValidationError))
 		{
 			return FMCPToolResult::Error(ValidationError);
 		}
 
-		// Use base class helper to find actor
 		if (AActor* Actor = FindActorByNameOrLabel(World, SingleActorName))
 		{
 			ActorsToDelete.Add(Actor);
@@ -45,7 +40,6 @@ FMCPToolResult FMCPTool_DeleteActors::Execute(const TSharedRef<FJsonObject>& Par
 		}
 	}
 
-	// Check for actor_names array
 	const TArray<TSharedPtr<FJsonValue>>* ActorNamesArray;
 	if (Params->TryGetArrayField(TEXT("actor_names"), ActorNamesArray))
 	{
@@ -54,13 +48,11 @@ FMCPToolResult FMCPTool_DeleteActors::Execute(const TSharedRef<FJsonObject>& Par
 			FString ActorName;
 			if (NameValue->TryGetString(ActorName))
 			{
-				// Validate each actor name
 				if (!FMCPParamValidator::ValidateActorName(ActorName, ValidationError))
 				{
 					return FMCPToolResult::Error(ValidationError);
 				}
 
-				// Use base class helper to find actor
 				if (AActor* Actor = FindActorByNameOrLabel(World, ActorName))
 				{
 					ActorsToDelete.AddUnique(Actor);
@@ -74,7 +66,6 @@ FMCPToolResult FMCPTool_DeleteActors::Execute(const TSharedRef<FJsonObject>& Par
 		}
 	}
 
-	// Check for class filter
 	FString ClassFilter;
 	if (Params->TryGetStringField(TEXT("class_filter"), ClassFilter) && !ClassFilter.IsEmpty())
 	{
@@ -93,7 +84,6 @@ FMCPToolResult FMCPTool_DeleteActors::Execute(const TSharedRef<FJsonObject>& Par
 		}
 	}
 
-	// Validate we have something to delete
 	if (ActorsToDelete.Num() == 0)
 	{
 		if (NotFoundNames.Num() > 0)
@@ -103,7 +93,6 @@ FMCPToolResult FMCPTool_DeleteActors::Execute(const TSharedRef<FJsonObject>& Par
 		return FMCPToolResult::Error(TEXT("No actors specified or found to delete. Provide actor_name, actor_names array, or class_filter."));
 	}
 
-	// Delete actors
 	for (AActor* Actor : ActorsToDelete)
 	{
 		if (Actor && IsValid(Actor))
@@ -112,10 +101,8 @@ FMCPToolResult FMCPTool_DeleteActors::Execute(const TSharedRef<FJsonObject>& Par
 		}
 	}
 
-	// Mark dirty using base class helper
 	MarkWorldDirty(World);
 
-	// Build result using base class helpers for JSON array construction
 	TSharedPtr<FJsonObject> ResultData = MakeShared<FJsonObject>();
 	ResultData->SetArrayField(TEXT("deleted"), StringArrayToJsonArray(DeletedNames));
 	ResultData->SetNumberField(TEXT("count"), DeletedNames.Num());

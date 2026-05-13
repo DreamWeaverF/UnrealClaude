@@ -431,7 +431,6 @@ bool FMCPTool_AssetSearch_ResponseFormat::RunTest(const FString& Parameters)
 
 			if (Asset.IsValid())
 			{
-				// Verify asset JSON structure
 				TestTrue("Asset should have 'path'", Asset->HasField(TEXT("path")));
 				TestTrue("Asset should have 'name'", Asset->HasField(TEXT("name")));
 				TestTrue("Asset should have 'class'", Asset->HasField(TEXT("class")));

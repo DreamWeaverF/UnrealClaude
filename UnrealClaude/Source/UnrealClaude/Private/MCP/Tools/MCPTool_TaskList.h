@@ -52,14 +52,11 @@ public:
 		bool bIncludeCompleted = ExtractOptionalBool(Params, TEXT("include_completed"), true);
 		int32 Limit = FMath::Clamp(ExtractOptionalNumber<int32>(Params, TEXT("limit"), 50), 1, 500);
 
-		// Get all tasks
 		TArray<TSharedPtr<FMCPAsyncTask>> AllTasks = TaskQueue->GetAllTasks(bIncludeCompleted);
 
-		// Get stats
 		int32 Pending, Running, Completed;
 		TaskQueue->GetStats(Pending, Running, Completed);
 
-		// Build task array
 		TArray<TSharedPtr<FJsonValue>> TaskArray;
 		int32 Count = 0;
 		for (const TSharedPtr<FMCPAsyncTask>& Task : AllTasks)
@@ -72,7 +69,6 @@ public:
 			Count++;
 		}
 
-		// Build result
 		TSharedPtr<FJsonObject> ResultData = MakeShared<FJsonObject>();
 		ResultData->SetArrayField(TEXT("tasks"), TaskArray);
 		ResultData->SetNumberField(TEXT("count"), TaskArray.Num());

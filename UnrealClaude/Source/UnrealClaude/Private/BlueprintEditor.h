@@ -132,17 +132,14 @@ public:
 	static bool ValidateFunctionName(const FString& FunctionName, FString& OutError);
 
 private:
-	// Constants
 	static constexpr int32 MaxNameLength = 128;
 
-	// Helper for parsing container types
 	static bool ParseContainerType(
 		const FString& TypeString,
 		FEdGraphPinType& OutPinType,
 		FString& OutError
 	);
 
-	// Helper for parsing struct types
 	static bool ParseStructType(
 		const FString& TypeName,
 		FEdGraphPinType& OutPinType,

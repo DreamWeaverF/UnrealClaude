@@ -28,7 +28,6 @@ struct FPinSearchConfig
 	/** If true, accept any pin matching direction when all else fails */
 	bool bAcceptAnyAsLastResort = false;
 
-	// Convenience constructors
 	static FPinSearchConfig Output(std::initializer_list<FName> Names)
 	{
 		FPinSearchConfig Config;

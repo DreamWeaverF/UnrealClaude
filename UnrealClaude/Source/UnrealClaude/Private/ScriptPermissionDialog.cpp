@@ -25,7 +25,6 @@ bool FScriptPermissionDialog::Show(
 	// Use shared pointer for approval state to avoid stack variable capture issues
 	TSharedPtr<bool> bApprovedPtr = MakeShared<bool>(false);
 
-	// Truncate preview if too long
 	FString DisplayPreview = ScriptPreview;
 	if (DisplayPreview.Len() > MaxPreviewLength)
 	{
@@ -34,19 +33,17 @@ bool FScriptPermissionDialog::Show(
 
 	FString TypeStr = ScriptTypeToString(Type);
 
-	// Create the modal window
 	TSharedPtr<SWindow> PermissionWindow = SNew(SWindow)
 		.Title(FText::FromString(FString::Printf(TEXT("Execute %s Script?"), *TypeStr.ToUpper())))
 		.ClientSize(FVector2D(DialogWidth, DialogHeight))
 		.SupportsMaximize(false)
 		.SupportsMinimize(false);
 
-	// Build and set content
 	PermissionWindow->SetContent(
 		BuildContent(DisplayPreview, TypeStr, Description, bApprovedPtr, PermissionWindow)
 	);
 
-	// Show as modal and wait for user response
+	// AddModalWindow blocks until the user closes the dialog
 	FSlateApplication::Get().AddModalWindow(PermissionWindow.ToSharedRef(), nullptr);
 
 	return *bApprovedPtr;
@@ -60,20 +57,17 @@ TSharedRef<SWidget> FScriptPermissionDialog::BuildContent(
 	TSharedPtr<SWindow> Window)
 {
 	return SNew(SVerticalBox)
-		// Header with warning and description
 		+ SVerticalBox::Slot()
 		.AutoHeight()
 		[
 			BuildHeaderSection(TypeStr, Description)
 		]
-		// Script preview
 		+ SVerticalBox::Slot()
 		.FillHeight(1.0f)
 		.Padding(10)
 		[
 			BuildPreviewSection(DisplayPreview)
 		]
-		// Buttons
 		+ SVerticalBox::Slot()
 		.AutoHeight()
 		.HAlign(HAlign_Right)
@@ -88,7 +82,6 @@ TSharedRef<SVerticalBox> FScriptPermissionDialog::BuildHeaderSection(
 	const FString& Description)
 {
 	return SNew(SVerticalBox)
-		// Warning header
 		+ SVerticalBox::Slot()
 		.AutoHeight()
 		.Padding(10)
@@ -97,7 +90,6 @@ TSharedRef<SVerticalBox> FScriptPermissionDialog::BuildHeaderSection(
 			.Text(FText::FromString(TEXT("⚠️ Claude wants to execute a script. Review the code below:")))
 			.Font(FCoreStyle::GetDefaultFontStyle("Bold", 12))
 		]
-		// Description
 		+ SVerticalBox::Slot()
 		.AutoHeight()
 		.Padding(10, 0)

@@ -17,7 +17,6 @@ void FClaudeSessionManager::AddExchange(const FString& Prompt, const FString& Re
 {
 	ConversationHistory.Add(TPair<FString, FString>(Prompt, Response));
 
-	// Trim old history if exceeds max size
 	while (ConversationHistory.Num() > MaxHistorySize)
 	{
 		ConversationHistory.RemoveAt(0);
@@ -60,16 +59,13 @@ bool FClaudeSessionManager::SaveSession()
 	FString SessionPath = GetSessionFilePath();
 	FString SaveDir = FPaths::GetPath(SessionPath);
 
-	// Create directory if needed
 	if (!IFileManager::Get().DirectoryExists(*SaveDir))
 	{
 		IFileManager::Get().MakeDirectory(*SaveDir, true);
 	}
 
-	// Build JSON structure
 	TSharedPtr<FJsonObject> RootObject = MakeShared<FJsonObject>();
 
-	// Create messages array
 	TArray<TSharedPtr<FJsonValue>> MessagesArray;
 	for (const TPair<FString, FString>& Exchange : ConversationHistory)
 	{
@@ -81,11 +77,9 @@ bool FClaudeSessionManager::SaveSession()
 
 	RootObject->SetArrayField(TEXT("messages"), MessagesArray);
 
-	// Add timestamp
 	FString Timestamp = FDateTime::UtcNow().ToString(TEXT("%Y-%m-%dT%H:%M:%SZ"));
 	RootObject->SetStringField(TEXT("last_updated"), Timestamp);
 
-	// Serialize and write
 	FString JsonString = FJsonUtils::Stringify(RootObject, true);
 	if (JsonString.IsEmpty())
 	{
@@ -127,10 +121,8 @@ bool FClaudeSessionManager::LoadSession()
 		return false;
 	}
 
-	// Clear existing history
 	ConversationHistory.Empty();
 
-	// Load messages array
 	TArray<TSharedPtr<FJsonValue>> MessagesArray;
 	if (FJsonUtils::GetArrayField(RootObject, TEXT("messages"), MessagesArray))
 	{

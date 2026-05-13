@@ -126,7 +126,6 @@ struct FMCPAsyncTask
 		{
 			Json->SetStringField(TEXT("completed_at"), CompletedTime.ToIso8601());
 
-			// Calculate duration
 			FTimespan Duration = CompletedTime - StartedTime;
 			Json->SetNumberField(TEXT("duration_ms"), Duration.GetTotalMilliseconds());
 

@@ -5,7 +5,6 @@
 #include "CoreMinimal.h"
 #include "MCP/MCPToolBase.h"
 
-// Forward declarations
 class UCharacterConfigDataAsset;
 class UDataTable;
 struct FCharacterStatsRow;
@@ -60,11 +59,9 @@ public:
 			"Default asset path: /Game/Characters/"
 		);
 		Info.Parameters = {
-			// Operation selector
 			FMCPToolParameter(TEXT("operation"), TEXT("string"),
 				TEXT("Operation to perform (see description)"), true),
 
-			// Asset paths
 			FMCPToolParameter(TEXT("package_path"), TEXT("string"),
 				TEXT("Package path for new assets (default: '/Game/Characters')"), false, TEXT("/Game/Characters")),
 			FMCPToolParameter(TEXT("asset_name"), TEXT("string"),
@@ -74,7 +71,6 @@ public:
 			FMCPToolParameter(TEXT("table_path"), TEXT("string"),
 				TEXT("Path to stats DataTable"), false),
 
-			// DataAsset config fields
 			FMCPToolParameter(TEXT("config_id"), TEXT("string"),
 				TEXT("Unique config identifier"), false),
 			FMCPToolParameter(TEXT("display_name"), TEXT("string"),
@@ -88,7 +84,6 @@ public:
 			FMCPToolParameter(TEXT("is_player_character"), TEXT("boolean"),
 				TEXT("Whether this is a player character config"), false),
 
-			// Movement stats (for config)
 			FMCPToolParameter(TEXT("base_walk_speed"), TEXT("number"),
 				TEXT("Base walking speed (cm/s)"), false),
 			FMCPToolParameter(TEXT("base_run_speed"), TEXT("number"),
@@ -104,7 +99,6 @@ public:
 			FMCPToolParameter(TEXT("base_gravity_scale"), TEXT("number"),
 				TEXT("Base gravity scale"), false),
 
-			// Combat stats
 			FMCPToolParameter(TEXT("base_health"), TEXT("number"),
 				TEXT("Base health value"), false),
 			FMCPToolParameter(TEXT("base_stamina"), TEXT("number"),
@@ -114,17 +108,14 @@ public:
 			FMCPToolParameter(TEXT("base_defense"), TEXT("number"),
 				TEXT("Base defense value"), false),
 
-			// Collision
 			FMCPToolParameter(TEXT("capsule_radius"), TEXT("number"),
 				TEXT("Capsule collision radius"), false),
 			FMCPToolParameter(TEXT("capsule_half_height"), TEXT("number"),
 				TEXT("Capsule collision half-height"), false),
 
-			// Tags
 			FMCPToolParameter(TEXT("gameplay_tags"), TEXT("array"),
 				TEXT("Array of gameplay tag names"), false),
 
-			// Stats table row fields
 			FMCPToolParameter(TEXT("row_name"), TEXT("string"),
 				TEXT("Row name in DataTable"), false),
 			FMCPToolParameter(TEXT("stats_id"), TEXT("string"),
@@ -150,7 +141,6 @@ public:
 			FMCPToolParameter(TEXT("tags"), TEXT("array"),
 				TEXT("Array of tag names for stats row"), false),
 
-			// Query options
 			FMCPToolParameter(TEXT("search_name"), TEXT("string"),
 				TEXT("Search filter for asset names"), false),
 			FMCPToolParameter(TEXT("search_tags"), TEXT("array"),
@@ -160,7 +150,6 @@ public:
 			FMCPToolParameter(TEXT("offset"), TEXT("number"),
 				TEXT("Skip first N results"), false, TEXT("0")),
 
-			// For apply operation
 			FMCPToolParameter(TEXT("character_name"), TEXT("string"),
 				TEXT("Target character actor name/label"), false),
 			FMCPToolParameter(TEXT("apply_movement"), TEXT("boolean"),
@@ -177,32 +166,26 @@ public:
 	virtual FMCPToolResult Execute(const TSharedRef<FJsonObject>& Params) override;
 
 private:
-	// DataAsset operations
 	FMCPToolResult ExecuteCreateCharacterData(const TSharedRef<FJsonObject>& Params);
 	FMCPToolResult ExecuteQueryCharacterData(const TSharedRef<FJsonObject>& Params);
 	FMCPToolResult ExecuteGetCharacterData(const TSharedRef<FJsonObject>& Params);
 	FMCPToolResult ExecuteUpdateCharacterData(const TSharedRef<FJsonObject>& Params);
 
-	// DataTable operations
 	FMCPToolResult ExecuteCreateStatsTable(const TSharedRef<FJsonObject>& Params);
 	FMCPToolResult ExecuteQueryStatsTable(const TSharedRef<FJsonObject>& Params);
 	FMCPToolResult ExecuteAddStatsRow(const TSharedRef<FJsonObject>& Params);
 	FMCPToolResult ExecuteUpdateStatsRow(const TSharedRef<FJsonObject>& Params);
 	FMCPToolResult ExecuteRemoveStatsRow(const TSharedRef<FJsonObject>& Params);
 
-	// Application
 	FMCPToolResult ExecuteApplyCharacterData(const TSharedRef<FJsonObject>& Params);
 
-	// Helper methods
 	UCharacterConfigDataAsset* LoadCharacterConfig(const FString& Path, FString& OutError);
 	UDataTable* LoadStatsTable(const FString& Path, FString& OutError);
 	bool SaveAsset(UObject* Asset, FString& OutError);
 
-	// JSON conversion
 	TSharedPtr<FJsonObject> ConfigToJson(UCharacterConfigDataAsset* Config);
 	TSharedPtr<FJsonObject> StatsRowToJson(const FCharacterStatsRow& Row, const FName& RowName);
 
-	// Config population from params
 	void PopulateConfigFromParams(UCharacterConfigDataAsset* Config, const TSharedRef<FJsonObject>& Params);
 	void PopulateStatsRowFromParams(FCharacterStatsRow& Row, const TSharedRef<FJsonObject>& Params);
 };

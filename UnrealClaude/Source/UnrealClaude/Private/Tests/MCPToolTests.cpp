@@ -19,7 +19,6 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 // ===== Tool Info Tests =====
-// These tests verify tool metadata is correctly configured
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FMCPTool_SpawnActor_GetInfo,
@@ -36,7 +35,6 @@ bool FMCPTool_SpawnActor_GetInfo::RunTest(const FString& Parameters)
 	TestTrue("Description should not be empty", !Info.Description.IsEmpty());
 	TestTrue("Should have parameters", Info.Parameters.Num() > 0);
 
-	// Check required parameters
 	bool bHasClassParam = false;
 	for (const FMCPToolParameter& Param : Info.Parameters)
 	{
@@ -103,7 +101,6 @@ bool FMCPTool_MoveActor_GetInfo::RunTest(const FString& Parameters)
 	TestTrue("Description should not be empty", !Info.Description.IsEmpty());
 	TestTrue("Should have parameters", Info.Parameters.Num() > 0);
 
-	// Check required parameters
 	bool bHasActorNameParam = false;
 	for (const FMCPToolParameter& Param : Info.Parameters)
 	{
@@ -133,7 +130,6 @@ bool FMCPTool_SetProperty_GetInfo::RunTest(const FString& Parameters)
 	TestTrue("Description should not be empty", !Info.Description.IsEmpty());
 	TestTrue("Should have parameters", Info.Parameters.Num() >= 3);
 
-	// Check for key parameters
 	bool bHasActorName = false;
 	bool bHasProperty = false;
 	bool bHasValue = false;
@@ -170,7 +166,6 @@ bool FMCPTool_GetLevelActors_GetInfo::RunTest(const FString& Parameters)
 }
 
 // ===== Parameter Validation Tests =====
-// These tests verify tools reject invalid parameters
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FMCPTool_SpawnActor_MissingClass,
@@ -182,13 +177,11 @@ bool FMCPTool_SpawnActor_MissingClass::RunTest(const FString& Parameters)
 {
 	FMCPTool_SpawnActor Tool;
 
-	// Create params without class
 	TSharedRef<FJsonObject> Params = MakeShared<FJsonObject>();
 	Params->SetStringField(TEXT("name"), TEXT("TestActor"));
 
 	FMCPToolResult Result = Tool.Execute(Params);
 
-	// Should fail because class is missing
 	TestFalse("Should fail without class parameter", Result.bSuccess);
 	TestTrue("Error should mention missing parameter", Result.Message.Contains(TEXT("class")) || Result.Message.Contains(TEXT("Missing")));
 
@@ -205,14 +198,12 @@ bool FMCPTool_SpawnActor_InvalidActorName::RunTest(const FString& Parameters)
 {
 	FMCPTool_SpawnActor Tool;
 
-	// Create params with invalid actor name (contains dangerous characters)
 	TSharedRef<FJsonObject> Params = MakeShared<FJsonObject>();
 	Params->SetStringField(TEXT("class"), TEXT("/Script/Engine.StaticMeshActor"));
 	Params->SetStringField(TEXT("name"), TEXT("Actor<script>"));
 
 	FMCPToolResult Result = Tool.Execute(Params);
 
-	// Should fail because name contains dangerous characters
 	TestFalse("Should fail with dangerous actor name", Result.bSuccess);
 	TestTrue("Error should mention invalid characters", Result.Message.Contains(TEXT("character")) || Result.Message.Contains(TEXT("invalid")));
 
@@ -229,7 +220,6 @@ bool FMCPTool_MoveActor_MissingActorName::RunTest(const FString& Parameters)
 {
 	FMCPTool_MoveActor Tool;
 
-	// Create params without actor_name
 	TSharedRef<FJsonObject> Params = MakeShared<FJsonObject>();
 
 	TSharedPtr<FJsonObject> LocationObj = MakeShared<FJsonObject>();
@@ -240,7 +230,6 @@ bool FMCPTool_MoveActor_MissingActorName::RunTest(const FString& Parameters)
 
 	FMCPToolResult Result = Tool.Execute(Params);
 
-	// Should fail because actor_name is missing
 	TestFalse("Should fail without actor_name parameter", Result.bSuccess);
 	TestTrue("Error should mention missing parameter", Result.Message.Contains(TEXT("actor_name")) || Result.Message.Contains(TEXT("Missing")));
 
@@ -290,17 +279,14 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMCPTool_SpawnActor_EnginePathBlocked::RunTest(const FString& Parameters)
 {
-	// Verify class path validator blocks dangerous paths
 	FString Error;
 
 	TestTrue("Engine.Actor should be valid",
 		FMCPParamValidator::ValidateClassPath(TEXT("/Script/Engine.Actor"), Error));
 
-	// Full class paths should be valid
 	TestTrue("/Script/Engine.StaticMeshActor should be valid",
 		FMCPParamValidator::ValidateClassPath(TEXT("/Script/Engine.StaticMeshActor"), Error));
 
-	// Empty class should be invalid
 	TestFalse("Empty class should be invalid",
 		FMCPParamValidator::ValidateClassPath(TEXT(""), Error));
 
@@ -357,7 +343,6 @@ bool FMCPTool_SpawnActor_TransformDefaults::RunTest(const FString& Parameters)
 	FMCPTool_SpawnActor Tool;
 	FMCPToolInfo Info = Tool.GetInfo();
 
-	// Verify default values are specified for transform parameters
 	for (const FMCPToolParameter& Param : Info.Parameters)
 	{
 		if (Param.Name == TEXT("location"))
@@ -393,7 +378,6 @@ bool FMCPToolRegistry_ToolsRegistered::RunTest(const FString& Parameters)
 {
 	FMCPToolRegistry Registry;
 
-	// Core tools should be registered
 	TestNotNull("spawn_actor should be registered", Registry.FindTool(TEXT("spawn_actor")));
 	TestNotNull("delete_actors should be registered", Registry.FindTool(TEXT("delete_actors")));
 	TestNotNull("move_actor should be registered", Registry.FindTool(TEXT("move_actor")));
@@ -404,11 +388,9 @@ bool FMCPToolRegistry_ToolsRegistered::RunTest(const FString& Parameters)
 	TestNotNull("capture_viewport should be registered", Registry.FindTool(TEXT("capture_viewport")));
 	TestNotNull("execute_script should be registered", Registry.FindTool(TEXT("execute_script")));
 
-	// Blueprint tools should be registered
 	TestNotNull("blueprint_query should be registered", Registry.FindTool(TEXT("blueprint_query")));
 	TestNotNull("blueprint_modify should be registered", Registry.FindTool(TEXT("blueprint_modify")));
 
-	// Animation Blueprint tools should be registered
 	TestNotNull("anim_blueprint_modify should be registered", Registry.FindTool(TEXT("anim_blueprint_modify")));
 
 	return true;
@@ -424,7 +406,6 @@ bool FMCPToolRegistry_ToolNotFound::RunTest(const FString& Parameters)
 {
 	FMCPToolRegistry Registry;
 
-	// Non-existent tools should return nullptr
 	TestNull("nonexistent_tool should not be found", Registry.FindTool(TEXT("nonexistent_tool")));
 	TestNull("empty string should not find tool", Registry.FindTool(TEXT("")));
 
@@ -432,7 +413,6 @@ bool FMCPToolRegistry_ToolNotFound::RunTest(const FString& Parameters)
 }
 
 // ===== Animation Blueprint Tool Tests =====
-// Tests for anim_blueprint_modify tool
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FMCPTool_AnimBlueprintModify_GetInfo,
@@ -454,7 +434,6 @@ bool FMCPTool_AnimBlueprintModify_GetInfo::RunTest(const FString& Parameters)
 	TestTrue("Description should not be empty", !Info.Description.IsEmpty());
 	TestTrue("Should have parameters", Info.Parameters.Num() > 0);
 
-	// Check required parameters
 	bool bHasBlueprintPath = false;
 	bool bHasOperation = false;
 	bool bHasStateMachine = false;
@@ -501,7 +480,6 @@ bool FMCPTool_AnimBlueprintModify_MissingBlueprintPath::RunTest(const FString& P
 
 	if (!Tool) return false;
 
-	// Create params without blueprint_path
 	TSharedRef<FJsonObject> Params = MakeShared<FJsonObject>();
 	Params->SetStringField(TEXT("operation"), TEXT("get_info"));
 
@@ -528,7 +506,6 @@ bool FMCPTool_AnimBlueprintModify_MissingOperation::RunTest(const FString& Param
 
 	if (!Tool) return false;
 
-	// Create params without operation
 	TSharedRef<FJsonObject> Params = MakeShared<FJsonObject>();
 	Params->SetStringField(TEXT("blueprint_path"), TEXT("/Game/Characters/ABP_Test"));
 
@@ -555,7 +532,6 @@ bool FMCPTool_AnimBlueprintModify_InvalidOperation::RunTest(const FString& Param
 
 	if (!Tool) return false;
 
-	// Create params with invalid operation
 	TSharedRef<FJsonObject> Params = MakeShared<FJsonObject>();
 	Params->SetStringField(TEXT("blueprint_path"), TEXT("/Game/Characters/ABP_Test"));
 	Params->SetStringField(TEXT("operation"), TEXT("invalid_operation_xyz"));
@@ -804,7 +780,6 @@ bool FMCPTool_AssetSearch_GetInfo::RunTest(const FString& Parameters)
 	TestTrue("Description should not be empty", !Info.Description.IsEmpty());
 	TestTrue("Should have parameters", Info.Parameters.Num() > 0);
 
-	// Check for key parameters
 	bool bHasClassFilter = false;
 	bool bHasPathFilter = false;
 	bool bHasNamePattern = false;
@@ -823,7 +798,6 @@ bool FMCPTool_AssetSearch_GetInfo::RunTest(const FString& Parameters)
 	TestTrue("Should have 'name_pattern' parameter", bHasNamePattern);
 	TestTrue("Should have 'limit' parameter", bHasLimit);
 
-	// Should be read-only
 	TestTrue("Should be read-only", Info.Annotations.bReadOnlyHint);
 
 	return true;
@@ -845,7 +819,6 @@ bool FMCPTool_AssetSearch_DefaultPath::RunTest(const FString& Parameters)
 
 	FMCPToolInfo Info = Tool->GetInfo();
 
-	// Check path_filter has default value
 	for (const FMCPToolParameter& Param : Info.Parameters)
 	{
 		if (Param.Name == TEXT("path_filter"))
@@ -882,7 +855,6 @@ bool FMCPTool_AssetDependencies_GetInfo::RunTest(const FString& Parameters)
 	TestEqual("Tool name should be asset_dependencies", Info.Name, TEXT("asset_dependencies"));
 	TestTrue("Description should not be empty", !Info.Description.IsEmpty());
 
-	// Check for required parameters
 	bool bHasAssetPath = false;
 	bool bHasIncludeSoft = false;
 
@@ -921,7 +893,6 @@ bool FMCPTool_AssetDependencies_MissingAssetPath::RunTest(const FString& Paramet
 
 	if (!Tool) return false;
 
-	// Execute without asset_path
 	TSharedRef<FJsonObject> Params = MakeShared<FJsonObject>();
 	FMCPToolResult Result = Tool->Execute(Params);
 
@@ -953,7 +924,6 @@ bool FMCPTool_AssetReferencers_GetInfo::RunTest(const FString& Parameters)
 	TestEqual("Tool name should be asset_referencers", Info.Name, TEXT("asset_referencers"));
 	TestTrue("Description should not be empty", !Info.Description.IsEmpty());
 
-	// Check for required parameters
 	bool bHasAssetPath = false;
 
 	for (const FMCPToolParameter& Param : Info.Parameters)
@@ -985,7 +955,6 @@ bool FMCPTool_AssetReferencers_MissingAssetPath::RunTest(const FString& Paramete
 
 	if (!Tool) return false;
 
-	// Execute without asset_path
 	TSharedRef<FJsonObject> Params = MakeShared<FJsonObject>();
 	FMCPToolResult Result = Tool->Execute(Params);
 
@@ -1017,7 +986,6 @@ bool FMCPTool_TaskSubmit_GetInfo::RunTest(const FString& Parameters)
 	TestEqual("Tool name should be task_submit", Info.Name, TEXT("task_submit"));
 	TestTrue("Description should not be empty", !Info.Description.IsEmpty());
 
-	// Check for required parameters
 	bool bHasToolName = false;
 	bool bHasParams = false;
 	bool bHasTimeout = false;
@@ -1063,7 +1031,6 @@ bool FMCPTool_TaskSubmit_MissingToolName::RunTest(const FString& Parameters)
 
 	if (!Tool) return false;
 
-	// Execute without tool_name
 	TSharedRef<FJsonObject> Params = MakeShared<FJsonObject>();
 	FMCPToolResult Result = Tool->Execute(Params);
 
@@ -1096,7 +1063,6 @@ bool FMCPTool_TaskStatus_GetInfo::RunTest(const FString& Parameters)
 	TestEqual("Tool name should be task_status", Info.Name, TEXT("task_status"));
 	TestTrue("Description should not be empty", !Info.Description.IsEmpty());
 
-	// Check for required task_id parameter
 	bool bHasTaskId = false;
 	for (const FMCPToolParameter& Param : Info.Parameters)
 	{
@@ -1206,7 +1172,6 @@ bool FMCPTool_TaskResult_GetInfo::RunTest(const FString& Parameters)
 	TestEqual("Tool name should be task_result", Info.Name, TEXT("task_result"));
 	TestTrue("Description should not be empty", !Info.Description.IsEmpty());
 
-	// Check for required task_id parameter
 	bool bHasTaskId = false;
 	for (const FMCPToolParameter& Param : Info.Parameters)
 	{
@@ -1270,7 +1235,6 @@ bool FMCPTool_TaskCancel_GetInfo::RunTest(const FString& Parameters)
 	TestEqual("Tool name should be task_cancel", Info.Name, TEXT("task_cancel"));
 	TestTrue("Description should not be empty", !Info.Description.IsEmpty());
 
-	// Check for required task_id parameter
 	bool bHasTaskId = false;
 	for (const FMCPToolParameter& Param : Info.Parameters)
 	{
@@ -1309,7 +1273,6 @@ bool FMCPTool_TaskCancel_NonExistentTask::RunTest(const FString& Parameters)
 
 	FMCPToolResult Result = Tool->Execute(Params);
 
-	// Should fail because task doesn't exist
 	TestFalse("Should fail for non-existent task", Result.bSuccess);
 	TestTrue("Error should mention not found or cannot cancel",
 		Result.Message.Contains(TEXT("not found")) || Result.Message.Contains(TEXT("cannot")));
@@ -1330,7 +1293,6 @@ bool FMCPToolRegistry_AssetToolsRegistered::RunTest(const FString& Parameters)
 {
 	FMCPToolRegistry Registry;
 
-	// Asset tools should be registered
 	TestNotNull("asset_search should be registered", Registry.FindTool(TEXT("asset_search")));
 	TestNotNull("asset_dependencies should be registered", Registry.FindTool(TEXT("asset_dependencies")));
 	TestNotNull("asset_referencers should be registered", Registry.FindTool(TEXT("asset_referencers")));
@@ -1348,7 +1310,6 @@ bool FMCPToolRegistry_TaskToolsRegistered::RunTest(const FString& Parameters)
 {
 	FMCPToolRegistry Registry;
 
-	// Task management tools should be registered
 	TestNotNull("task_submit should be registered", Registry.FindTool(TEXT("task_submit")));
 	TestNotNull("task_status should be registered", Registry.FindTool(TEXT("task_status")));
 	TestNotNull("task_list should be registered", Registry.FindTool(TEXT("task_list")));
@@ -1368,7 +1329,6 @@ bool FMCPToolRegistry_TaskQueueLifecycle::RunTest(const FString& Parameters)
 {
 	FMCPToolRegistry Registry;
 
-	// Task queue should exist
 	TSharedPtr<FMCPTaskQueue> Queue = Registry.GetTaskQueue();
 	TestTrue("Task queue should exist", Queue.IsValid());
 
@@ -1474,7 +1434,6 @@ bool FMCPTool_BlueprintQuery_NewOps::RunTest(const FString& Parameters)
 
 	FMCPToolInfo Info = Tool->GetInfo();
 
-	// Verify new parameters exist
 	TSet<FString> ParamNames;
 	for (const FMCPToolParameter& Param : Info.Parameters)
 	{
@@ -1487,7 +1446,6 @@ bool FMCPTool_BlueprintQuery_NewOps::RunTest(const FString& Parameters)
 	TestTrue("Should have ref_name param", ParamNames.Contains(TEXT("ref_name")));
 	TestTrue("Should have ref_type param", ParamNames.Contains(TEXT("ref_type")));
 
-	// Verify operation description lists new ops
 	for (const FMCPToolParameter& Param : Info.Parameters)
 	{
 		if (Param.Name == TEXT("operation"))
@@ -1862,7 +1820,6 @@ bool FMCPTool_EnhancedInput_GetInfo::RunTest(const FString& Parameters)
 	TestTrue("Description should not be empty", !Info.Description.IsEmpty());
 	TestTrue("Should have parameters", Info.Parameters.Num() > 0);
 
-	// Check for key parameters
 	bool bHasOperation = false;
 	bool bHasActionName = false;
 	bool bHasContextName = false;
@@ -1901,7 +1858,6 @@ bool FMCPTool_EnhancedInput_MissingOperation::RunTest(const FString& Parameters)
 	TestNotNull("Tool should exist", Tool);
 	if (!Tool) return false;
 
-	// Execute without operation
 	TSharedRef<FJsonObject> Params = MakeShared<FJsonObject>();
 	Params->SetStringField(TEXT("action_name"), TEXT("IA_Test"));
 	FMCPToolResult Result = Tool->Execute(Params);

@@ -21,7 +21,6 @@ public:
 	{
 	}
 
-	// TCommands interface
 	virtual void RegisterCommands() override;
 
 public:

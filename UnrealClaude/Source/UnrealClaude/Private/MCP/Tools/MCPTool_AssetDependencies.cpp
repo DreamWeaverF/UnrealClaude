@@ -6,7 +6,6 @@
 
 FMCPToolResult FMCPTool_AssetDependencies::Execute(const TSharedRef<FJsonObject>& Params)
 {
-	// Extract required asset_path parameter
 	FString AssetPath;
 	TOptional<FMCPToolResult> Error;
 	if (!ExtractRequiredString(Params, TEXT("asset_path"), AssetPath, Error))
@@ -14,28 +13,23 @@ FMCPToolResult FMCPTool_AssetDependencies::Execute(const TSharedRef<FJsonObject>
 		return Error.GetValue();
 	}
 
-	// Extract optional parameters
 	bool bIncludeSoft = ExtractOptionalBool(Params, TEXT("include_soft"), true);
 	int32 Limit = FMath::Clamp(ExtractOptionalNumber<int32>(Params, TEXT("limit"), 25), 1, 1000);
 	int32 Offset = FMath::Max(0, ExtractOptionalNumber<int32>(Params, TEXT("offset"), 0));
 
-	// Get AssetRegistry
 	FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
 	IAssetRegistry& AssetRegistry = AssetRegistryModule.Get();
 
-	// Normalize the asset path - handle both package paths and full object paths
+	// Accept both full object path (/Game/BP.BP_C) and package path (/Game/BP) — normalize to package path
 	FString PackagePath = AssetPath;
 	if (PackagePath.Contains(TEXT(".")))
 	{
-		// Extract package path from full object path (e.g., /Game/BP.BP_C -> /Game/BP)
 		PackagePath = FPackageName::ObjectPathToPackageName(AssetPath);
 	}
 
-	// Verify the asset exists
 	FAssetData AssetData = AssetRegistry.GetAssetByObjectPath(FSoftObjectPath(AssetPath));
 	if (!AssetData.IsValid())
 	{
-		// Try with package name
 		TArray<FAssetData> AssetsInPackage;
 		AssetRegistry.GetAssetsByPackageName(FName(*PackagePath), AssetsInPackage);
 		if (AssetsInPackage.Num() == 0)
@@ -45,17 +39,14 @@ FMCPToolResult FMCPTool_AssetDependencies::Execute(const TSharedRef<FJsonObject>
 		AssetData = AssetsInPackage[0];
 	}
 
-	// Query dependencies
 	TArray<FName> Dependencies;
 
-	// Build dependency query flags - construct FDependencyQuery from EDependencyQuery enum
+	// Default FDependencyQuery() returns hard+soft; passing Hard flag restricts to hard only
 	UE::AssetRegistry::FDependencyQuery QueryFlags;
 	if (!bIncludeSoft)
 	{
-		// Only hard dependencies
 		QueryFlags = UE::AssetRegistry::FDependencyQuery(UE::AssetRegistry::EDependencyQuery::Hard);
 	}
-	// else: default FDependencyQuery() returns all dependencies (no requirements)
 
 	AssetRegistry.GetDependencies(
 		FName(*PackagePath),
@@ -64,7 +55,6 @@ FMCPToolResult FMCPTool_AssetDependencies::Execute(const TSharedRef<FJsonObject>
 		QueryFlags
 	);
 
-	// Build filtered list (skip engine/script packages)
 	TArray<FName> FilteredDeps;
 	for (const FName& DepPath : Dependencies)
 	{
@@ -75,14 +65,12 @@ FMCPToolResult FMCPTool_AssetDependencies::Execute(const TSharedRef<FJsonObject>
 		}
 	}
 
-	// Apply pagination
 	int32 Total = FilteredDeps.Num();
 	int32 StartIndex = FMath::Min(Offset, Total);
 	int32 EndIndex = FMath::Min(StartIndex + Limit, Total);
 	int32 Count = EndIndex - StartIndex;
 	bool bHasMore = EndIndex < Total;
 
-	// Build result array for the paginated slice
 	TArray<TSharedPtr<FJsonValue>> DependencyArray;
 	for (int32 i = StartIndex; i < EndIndex; ++i)
 	{
@@ -92,7 +80,6 @@ FMCPToolResult FMCPTool_AssetDependencies::Execute(const TSharedRef<FJsonObject>
 		TSharedPtr<FJsonObject> DepJson = MakeShared<FJsonObject>();
 		DepJson->SetStringField(TEXT("path"), PathStr);
 
-		// Try to get the asset class for this dependency
 		TArray<FAssetData> DepAssets;
 		AssetRegistry.GetAssetsByPackageName(DepPath, DepAssets);
 		if (DepAssets.Num() > 0)
@@ -104,7 +91,6 @@ FMCPToolResult FMCPTool_AssetDependencies::Execute(const TSharedRef<FJsonObject>
 		DependencyArray.Add(MakeShared<FJsonValueObject>(DepJson));
 	}
 
-	// Build result data with pagination metadata
 	TSharedPtr<FJsonObject> ResultData = MakeShared<FJsonObject>();
 	ResultData->SetStringField(TEXT("asset_path"), AssetPath);
 	ResultData->SetArrayField(TEXT("dependencies"), DependencyArray);
@@ -119,7 +105,6 @@ FMCPToolResult FMCPTool_AssetDependencies::Execute(const TSharedRef<FJsonObject>
 	}
 	ResultData->SetBoolField(TEXT("include_soft"), bIncludeSoft);
 
-	// Build message
 	FString Message;
 	if (Count == Total)
 	{

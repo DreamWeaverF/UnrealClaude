@@ -7,7 +7,6 @@
 #include "MCPParamValidator.h"
 #include "UnrealClaudeUtils.h"
 
-// Forward declarations
 class UWorld;
 
 /**
@@ -180,8 +179,6 @@ protected:
 	}
 
 	// ===== Transform Extraction Helpers =====
-	// These consolidate vector/rotator/scale extraction from JSON parameters
-	// to eliminate duplicate code across MCP tools
 
 	/**
 	 * Extract a FVector from a nested JSON object parameter
@@ -327,7 +324,6 @@ protected:
 	}
 
 	// ===== Validation Helpers =====
-	// Consolidate common validation patterns to reduce boilerplate
 
 	/**
 	 * Validate a string parameter and return error if invalid
@@ -375,13 +371,11 @@ protected:
 		FString& OutValue,
 		TOptional<FMCPToolResult>& OutError) const
 	{
-		// Step 1: Extract
 		if (!ExtractRequiredString(Params, ParamName, OutValue, OutError))
 		{
 			return false;
 		}
 
-		// Step 2: Validate
 		return ValidateParam(OutValue, ValidatorFunc, OutError);
 	}
 
@@ -414,7 +408,6 @@ protected:
 			return true;  // Missing is OK for optional
 		}
 
-		// Present - must validate
 		if (!ValidateParam(ExtractedValue, ValidatorFunc, OutError))
 		{
 			return false;

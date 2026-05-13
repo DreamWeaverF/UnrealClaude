@@ -31,13 +31,11 @@ public:
 	virtual FMCPToolResult Execute(const TSharedRef<FJsonObject>& Params) override;
 
 private:
-	// Operation handlers
 	FMCPToolResult ExecuteSetAssetProperty(const TSharedRef<FJsonObject>& Params);
 	FMCPToolResult ExecuteSaveAsset(const TSharedRef<FJsonObject>& Params);
 	FMCPToolResult ExecuteGetAssetInfo(const TSharedRef<FJsonObject>& Params);
 	FMCPToolResult ExecuteListAssets(const TSharedRef<FJsonObject>& Params);
 
-	// Property reflection helpers (adapted from SetProperty tool)
 	bool NavigateToProperty(
 		UObject* StartObject,
 		const TArray<FString>& PathParts,
@@ -55,10 +53,8 @@ private:
 	bool SetStructPropertyValue(FStructProperty* StructProp, void* ValuePtr, const TSharedPtr<FJsonValue>& Value);
 	bool SetObjectPropertyValue(FObjectProperty* ObjProp, void* ValuePtr, const TSharedPtr<FJsonValue>& Value, FString& OutError);
 
-	// Asset loading
 	UObject* LoadAssetByPath(const FString& AssetPath, FString& OutError);
 
-	// Utility
 	TSharedPtr<FJsonObject> BuildAssetInfoJson(UObject* Asset);
 	TArray<TSharedPtr<FJsonValue>> GetAssetProperties(UObject* Asset, bool bEditableOnly);
 };

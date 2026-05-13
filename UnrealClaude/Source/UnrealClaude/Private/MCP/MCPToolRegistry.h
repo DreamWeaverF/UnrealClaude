@@ -5,7 +5,6 @@
 #include "CoreMinimal.h"
 #include "Dom/JsonObject.h"
 
-// Forward declarations
 class FMCPTaskQueue;
 
 /**

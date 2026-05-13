@@ -33,7 +33,6 @@ FScriptExecutionManager::FScriptExecutionManager()
 {
 	LoadHistory();
 
-	// Ensure script directories exist on startup
 	FString ContentScriptDir = GetContentScriptDirectory();
 	if (!IFileManager::Get().DirectoryExists(*ContentScriptDir))
 	{
@@ -52,20 +51,17 @@ FScriptExecutionResult FScriptExecutionManager::ExecuteScript(
 	const FString& ScriptContent,
 	const FString& Description)
 {
-	// Parse description from header if not provided
 	FString FinalDescription = Description;
 	if (FinalDescription.IsEmpty())
 	{
 		FinalDescription = ScriptHeader::ParseDescription(ScriptContent);
 	}
 
-	// Show permission dialog
 	if (!ShowPermissionDialog(ScriptContent, Type, FinalDescription))
 	{
 		return FScriptExecutionResult::Error(TEXT("Script execution denied by user"));
 	}
 
-	// Execute based on type
 	FScriptExecutionResult Result;
 	switch (Type)
 	{
@@ -77,9 +73,6 @@ FScriptExecutionResult FScriptExecutionManager::ExecuteScript(
 			break;
 		case EScriptType::Console:
 			Result = ExecuteConsole(ScriptContent, FinalDescription);
-			break;
-		case EScriptType::EditorUtility:
-			Result = ExecuteEditorUtility(ScriptContent, FinalDescription);
 			break;
 		default:
 			Result = FScriptExecutionResult::Error(TEXT("Unknown script type"));
@@ -107,7 +100,6 @@ bool FScriptExecutionManager::ShowPermissionDialog(
 		}
 	}
 
-	// Delegate to the extracted permission dialog class
 	return FScriptPermissionDialog::Show(ScriptPreview, Type, Description);
 }
 
@@ -116,7 +108,6 @@ FScriptExecutionResult FScriptExecutionManager::ExecuteCpp(
 	const FString& Description)
 {
 #if WITH_LIVE_CODING
-	// Generate script name and write to file
 	FString ScriptName = GenerateScriptName(EScriptType::Cpp, Description);
 	FString FilePath = WriteScriptFile(ScriptContent, EScriptType::Cpp, ScriptName);
 
@@ -127,19 +118,16 @@ FScriptExecutionResult FScriptExecutionManager::ExecuteCpp(
 
 	UE_LOG(LogUnrealClaude, Log, TEXT("C++ script written to: %s"), *FilePath);
 
-	// Trigger Live Coding compilation
 	FString ErrorLog;
 	FScriptExecutionResult Result;
 
 	if (TriggerLiveCodingCompile(ErrorLog))
 	{
-		// Compilation succeeded
 		Result = FScriptExecutionResult::Success(
 			TEXT("C++ script compiled successfully via Live Coding"),
 			TEXT("Script file: ") + FilePath
 		);
 
-		// Add to history
 		FScriptHistoryEntry Entry;
 		Entry.ScriptType = EScriptType::Cpp;
 		Entry.Filename = ScriptName + TEXT(".cpp");
@@ -152,8 +140,7 @@ FScriptExecutionResult FScriptExecutionManager::ExecuteCpp(
 		return Result;
 	}
 
-	// Compilation failed - return error for Claude to fix and retry
-	// Claude will call execute_script again with fixed code
+	// Returning an error here lets the calling agent re-invoke execute_script with corrected code
 	UE_LOG(LogUnrealClaude, Warning, TEXT("C++ compilation failed, returning error for Claude to fix"));
 
 	Result = FScriptExecutionResult::Error(
@@ -161,7 +148,6 @@ FScriptExecutionResult FScriptExecutionManager::ExecuteCpp(
 		ErrorLog
 	);
 
-	// Add to history as failure
 	FScriptHistoryEntry Entry;
 	Entry.ScriptType = EScriptType::Cpp;
 	Entry.Filename = ScriptName + TEXT(".cpp");
@@ -192,7 +178,6 @@ public:
 	{
 		FString Message(V);
 
-		// Check for Live Coding specific messages
 		if (Category == FName("LiveCoding") || Category == FName("LogLiveCoding"))
 		{
 			if (Verbosity == ELogVerbosity::Error || Verbosity == ELogVerbosity::Fatal)
@@ -206,7 +191,7 @@ public:
 			}
 		}
 
-		// Also check for compiler error patterns in any category
+		// Catch compiler/linker errors that arrive on other log categories
 		if (Message.Contains(TEXT("error C")) ||      // MSVC error
 		    Message.Contains(TEXT("error:")) ||        // Generic compiler error
 		    Message.Contains(TEXT("fatal error")) ||   // Fatal errors
@@ -228,7 +213,7 @@ public:
 			return FString();
 		}
 
-		// Return first few errors (avoid overwhelming output)
+		// Cap at 5 errors so the caller doesn't get a multi-page wall of text
 		FString Summary;
 		int32 MaxErrors = FMath::Min(5, ErrorMessages.Num());
 		for (int32 i = 0; i < MaxErrors; i++)
@@ -259,14 +244,13 @@ bool FScriptExecutionManager::TriggerLiveCodingCompile(FString& OutErrorLog)
 		return false;
 	}
 
-	// Set up output capture to monitor for compilation errors
+	// Hook GLog before triggering compile so we capture every error/warning event
 	FLiveCodingOutputCapture OutputCapture;
 	GLog->AddOutputDevice(&OutputCapture);
 
-	// Trigger compilation
 	LiveCoding->Compile(ELiveCodingCompileFlags::None, nullptr);
 
-	// Wait for compilation with polling
+	// LiveCoding compiles asynchronously; poll IsCompiling until done or timeout
 	float WaitTime = 0.0f;
 	const float MaxWait = 60.0f;
 	const float PollInterval = 0.5f;
@@ -277,17 +261,14 @@ bool FScriptExecutionManager::TriggerLiveCodingCompile(FString& OutErrorLog)
 		WaitTime += PollInterval;
 	}
 
-	// Remove output capture
 	GLog->RemoveOutputDevice(&OutputCapture);
 
-	// Check for timeout
 	if (WaitTime >= MaxWait)
 	{
 		OutErrorLog = TEXT("Live Coding compilation timed out (60s)");
 		return false;
 	}
 
-	// Check for compilation errors captured from output log
 	if (OutputCapture.bHasErrors)
 	{
 		OutErrorLog = OutputCapture.GetErrorSummary();
@@ -319,7 +300,6 @@ FScriptExecutionResult FScriptExecutionManager::ExecutePython(
 		return FScriptExecutionResult::Error(TEXT("No active world"));
 	}
 
-	// Write script to file
 	FString ScriptName = GenerateScriptName(EScriptType::Python, Description);
 	FString FilePath = WriteScriptFile(ScriptContent, EScriptType::Python, ScriptName);
 
@@ -328,14 +308,13 @@ FScriptExecutionResult FScriptExecutionManager::ExecutePython(
 		return FScriptExecutionResult::Error(TEXT("Failed to write Python script file"));
 	}
 
-	// Count actors before execution for validation
+	// Snapshot actor count so we can report how many the script created
 	int32 ActorCountBefore = 0;
 	for (TActorIterator<AActor> It(World); It; ++It)
 	{
 		ActorCountBefore++;
 	}
 
-	// Execute via console command
 	FString Command = FString::Printf(TEXT("py \"%s\""), *FilePath);
 
 	// Capture both exec output and global log output (Python errors go to GLog, not exec output)
@@ -347,7 +326,6 @@ FScriptExecutionResult FScriptExecutionManager::ExecutePython(
 
 	GLog->RemoveOutputDevice(&LogOutput);
 
-	// Combine both output sources
 	FString ExecText = ExecOutput.GetTrimmedOutput();
 	FString LogText = LogOutput.GetTrimmedOutput();
 	FString Output = ExecText;
@@ -360,7 +338,6 @@ FScriptExecutionResult FScriptExecutionManager::ExecutePython(
 		Output += LogText;
 	}
 
-	// Count actors after execution
 	int32 ActorCountAfter = 0;
 	for (TActorIterator<AActor> It(World); It; ++It)
 	{
@@ -373,7 +350,7 @@ FScriptExecutionResult FScriptExecutionManager::ExecutePython(
 	UE_LOG(LogUnrealClaude, Log, TEXT("Python script actor delta: %d before, %d after (%+d)"),
 		ActorCountBefore, ActorCountAfter, ActorsCreated);
 
-	// Detect Python errors in output (check both exec and log output)
+	// Heuristic scan for Python error markers — Python exceptions don't fail the console exec, so we sniff the text
 	bool bHasError = Output.Contains(TEXT("Traceback")) ||
 	                 Output.Contains(TEXT("Error:")) ||
 	                 Output.Contains(TEXT("SyntaxError")) ||
@@ -389,7 +366,6 @@ FScriptExecutionResult FScriptExecutionManager::ExecutePython(
 	                 Output.Contains(TEXT("IndentationError")) ||
 	                 Output.Contains(TEXT("KeyError"));
 
-	// Build result message with actor count info
 	FString ResultMessage;
 	if (bHasError)
 	{
@@ -400,7 +376,6 @@ FScriptExecutionResult FScriptExecutionManager::ExecutePython(
 		ResultMessage = FString::Printf(TEXT("Python script executed (actors created: %d)"), ActorsCreated);
 	}
 
-	// Append output to result so Claude can see what happened
 	FString FullOutput = Output;
 	if (ActorsCreated > 0)
 	{
@@ -411,7 +386,6 @@ FScriptExecutionResult FScriptExecutionManager::ExecutePython(
 		FullOutput += TEXT("\n[WARNING: Script reported success but no new actors were created in the level. The script may have failed silently.]");
 	}
 
-	// Add to history
 	FScriptHistoryEntry Entry;
 	Entry.ScriptType = EScriptType::Python;
 	Entry.Filename = ScriptName + TEXT(".py");
@@ -444,11 +418,10 @@ FScriptExecutionResult FScriptExecutionManager::ExecuteConsole(
 		return FScriptExecutionResult::Error(TEXT("No active world"));
 	}
 
-	// Parse commands (one per line)
+	// One command per line — matches in-editor console behaviour
 	TArray<FString> Commands;
 	ScriptContent.ParseIntoArrayLines(Commands, true);
 
-	// Output capture using shared utility
 	FUnrealClaudeOutputDevice OutputDevice;
 	FString AllOutput;
 	int32 ExecutedCount = 0;
@@ -457,20 +430,18 @@ FScriptExecutionResult FScriptExecutionManager::ExecuteConsole(
 	{
 		FString Command = RawCommand.TrimStartAndEnd();
 
-		// Skip empty lines and comments
 		if (Command.IsEmpty() || Command.StartsWith(TEXT("#")) || Command.StartsWith(TEXT("//")))
 		{
 			continue;
 		}
 
-		// Skip header metadata lines
+		// Skip @UnrealClaude header metadata that scripts ship with
 		if (Command.Contains(TEXT("@UnrealClaude")) || Command.Contains(TEXT("@Name:")) ||
 			Command.Contains(TEXT("@Description:")) || Command.Contains(TEXT("@Created:")))
 		{
 			continue;
 		}
 
-		// Validate command
 		FString ValidationError;
 		if (!FMCPParamValidator::ValidateConsoleCommand(Command, ValidationError))
 		{
@@ -484,7 +455,6 @@ FScriptExecutionResult FScriptExecutionManager::ExecuteConsole(
 		ExecutedCount++;
 	}
 
-	// Add to history
 	FScriptHistoryEntry Entry;
 	Entry.ScriptType = EScriptType::Console;
 	Entry.Filename = FString::Printf(TEXT("console_%d.txt"), ScriptCounter);
@@ -497,17 +467,6 @@ FScriptExecutionResult FScriptExecutionManager::ExecuteConsole(
 	return FScriptExecutionResult::Success(
 		FString::Printf(TEXT("Executed %d console commands"), ExecutedCount),
 		AllOutput
-	);
-}
-
-FScriptExecutionResult FScriptExecutionManager::ExecuteEditorUtility(
-	const FString& ScriptContent,
-	const FString& Description)
-{
-	// Editor Utility execution is more complex - would need to create Blueprint asset
-	// For now, return not implemented
-	return FScriptExecutionResult::Error(
-		TEXT("Editor Utility script execution not yet implemented. Use Python or Console commands instead.")
 	);
 }
 
@@ -528,7 +487,6 @@ FString FScriptExecutionManager::WriteScriptFile(
 		Directory = GetContentScriptDirectory();
 	}
 
-	// Ensure directory exists
 	if (!IFileManager::Get().DirectoryExists(*Directory))
 	{
 		IFileManager::Get().MakeDirectory(*Directory, true);
@@ -547,11 +505,10 @@ FString FScriptExecutionManager::WriteScriptFile(
 
 FString FScriptExecutionManager::GenerateScriptName(EScriptType Type, const FString& Description)
 {
-	// Sanitize description for filename using single-pass character filtering
+	// Sanitize description for filename: replace Windows-invalid chars with underscores, cap at 30
 	FString BaseName;
 	BaseName.Reserve(30);
 
-	// Invalid filename characters on Windows
 	static const TCHAR* InvalidChars = TEXT(" /\\:*?\"<>|");
 
 	int32 CharCount = 0;
@@ -562,7 +519,6 @@ FString FScriptExecutionManager::GenerateScriptName(EScriptType Type, const FStr
 			break;
 		}
 
-		// Replace invalid characters with underscore
 		bool bIsInvalid = false;
 		for (const TCHAR* InvalidChar = InvalidChars; *InvalidChar; ++InvalidChar)
 		{
@@ -590,13 +546,12 @@ void FScriptExecutionManager::AddToHistory(const FScriptHistoryEntry& Entry)
 {
 	History.Add(Entry);
 
-	// Trim if exceeds max
 	while (History.Num() > MaxHistorySize)
 	{
 		History.RemoveAt(0);
 	}
 
-	// Auto-save
+	// Persist after every change so history survives editor crashes
 	SaveHistory();
 }
 
@@ -727,7 +682,6 @@ FString FScriptExecutionManager::CleanupAll()
 	int32 DeletedFiles = 0;
 	TArray<FString> Errors;
 
-	// Delete C++ scripts
 	FString CppDir = GetCppScriptDirectory();
 	if (IFileManager::Get().DirectoryExists(*CppDir))
 	{
@@ -745,7 +699,6 @@ FString FScriptExecutionManager::CleanupAll()
 		IFileManager::Get().DeleteDirectory(*CppDir, false, true);
 	}
 
-	// Delete content scripts
 	FString ContentDir = GetContentScriptDirectory();
 	if (IFileManager::Get().DirectoryExists(*ContentDir))
 	{
@@ -763,7 +716,6 @@ FString FScriptExecutionManager::CleanupAll()
 		IFileManager::Get().DeleteDirectory(*ContentDir, false, true);
 	}
 
-	// Clear history
 	int32 HistoryCount = History.Num();
 	ClearHistory();
 

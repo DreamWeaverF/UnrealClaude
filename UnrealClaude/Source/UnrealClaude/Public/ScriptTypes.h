@@ -12,8 +12,7 @@ enum class EScriptType : uint8
 {
 	Cpp,
 	Python,
-	Console,
-	EditorUtility
+	Console
 };
 
 /**
@@ -26,7 +25,6 @@ inline FString ScriptTypeToString(EScriptType Type)
 		case EScriptType::Cpp: return TEXT("cpp");
 		case EScriptType::Python: return TEXT("python");
 		case EScriptType::Console: return TEXT("console");
-		case EScriptType::EditorUtility: return TEXT("editor_utility");
 		default: return TEXT("unknown");
 	}
 }
@@ -39,7 +37,6 @@ inline EScriptType StringToScriptType(const FString& TypeStr)
 	if (TypeStr.Equals(TEXT("cpp"), ESearchCase::IgnoreCase)) return EScriptType::Cpp;
 	if (TypeStr.Equals(TEXT("python"), ESearchCase::IgnoreCase)) return EScriptType::Python;
 	if (TypeStr.Equals(TEXT("console"), ESearchCase::IgnoreCase)) return EScriptType::Console;
-	if (TypeStr.Equals(TEXT("editor_utility"), ESearchCase::IgnoreCase)) return EScriptType::EditorUtility;
 	return EScriptType::Console; // Default
 }
 
@@ -53,7 +50,6 @@ inline FString GetScriptExtension(EScriptType Type)
 		case EScriptType::Cpp: return TEXT(".cpp");
 		case EScriptType::Python: return TEXT(".py");
 		case EScriptType::Console: return TEXT(".txt");
-		case EScriptType::EditorUtility: return TEXT(".uasset");
 		default: return TEXT(".txt");
 	}
 }
@@ -64,7 +60,6 @@ inline FString GetScriptExtension(EScriptType Type)
  */
 namespace ScriptHeader
 {
-	// C++ header format
 	inline FString FormatCppHeader(const FString& Description, const FString& ScriptName)
 	{
 		return FString::Printf(TEXT(
@@ -77,7 +72,6 @@ namespace ScriptHeader
 		), *ScriptName, *Description, *FDateTime::UtcNow().ToString(TEXT("%Y-%m-%dT%H:%M:%SZ")));
 	}
 
-	// Python header format
 	inline FString FormatPythonHeader(const FString& Description, const FString& ScriptName)
 	{
 		return FString::Printf(TEXT(
@@ -90,7 +84,6 @@ namespace ScriptHeader
 		), *ScriptName, *Description, *FDateTime::UtcNow().ToString(TEXT("%Y-%m-%dT%H:%M:%SZ")));
 	}
 
-	// Console commands header (as comment)
 	inline FString FormatConsoleHeader(const FString& Description, const FString& ScriptName)
 	{
 		return FString::Printf(TEXT(
@@ -107,21 +100,18 @@ namespace ScriptHeader
 	 */
 	inline FString ParseDescription(const FString& ScriptContent)
 	{
-		// Look for @Description: pattern
 		int32 DescStart = ScriptContent.Find(TEXT("@Description:"));
 		if (DescStart == INDEX_NONE)
 		{
 			return TEXT("No description provided");
 		}
 
-		// Find end of line
 		int32 LineEnd = ScriptContent.Find(TEXT("\n"), ESearchCase::IgnoreCase, ESearchDir::FromStart, DescStart);
 		if (LineEnd == INDEX_NONE)
 		{
 			LineEnd = ScriptContent.Len();
 		}
 
-		// Extract description text
 		FString Description = ScriptContent.Mid(DescStart + 13, LineEnd - DescStart - 13);
 		Description.TrimStartAndEndInline();
 

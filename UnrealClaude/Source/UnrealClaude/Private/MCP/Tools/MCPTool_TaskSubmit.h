@@ -60,7 +60,6 @@ public:
 			return FMCPToolResult::Error(TEXT("Task queue not initialized"));
 		}
 
-		// Extract tool name
 		FString ToolName;
 		TOptional<FMCPToolResult> Error;
 		if (!ExtractRequiredString(Params, TEXT("tool_name"), ToolName, Error))
@@ -68,7 +67,6 @@ public:
 			return Error.GetValue();
 		}
 
-		// Extract parameters for the tool
 		TSharedPtr<FJsonObject> ToolParams;
 		const TSharedPtr<FJsonObject>* ParamsObj;
 		if (Params->TryGetObjectField(TEXT("params"), ParamsObj))
@@ -80,10 +78,8 @@ public:
 			ToolParams = MakeShared<FJsonObject>();
 		}
 
-		// Extract timeout
 		uint32 TimeoutMs = static_cast<uint32>(ExtractOptionalNumber<int32>(Params, TEXT("timeout_ms"), 120000));
 
-		// Submit the task
 		FGuid TaskId = TaskQueue->SubmitTask(ToolName, ToolParams, TimeoutMs);
 
 		if (!TaskId.IsValid())
@@ -91,7 +87,6 @@ public:
 			return FMCPToolResult::Error(TEXT("Failed to submit task - queue may be at capacity or tool not found"));
 		}
 
-		// Return task ID
 		TSharedPtr<FJsonObject> ResultData = MakeShared<FJsonObject>();
 		ResultData->SetStringField(TEXT("task_id"), TaskId.ToString());
 		ResultData->SetStringField(TEXT("tool_name"), ToolName);

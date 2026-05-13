@@ -21,7 +21,6 @@ FMCPToolResult FMCPTool_CharacterData::Execute(const TSharedRef<FJsonObject>& Pa
 		return Error.GetValue();
 	}
 
-	// DataAsset operations
 	if (Operation == TEXT("create_character_data"))
 	{
 		return ExecuteCreateCharacterData(Params);
@@ -38,7 +37,6 @@ FMCPToolResult FMCPTool_CharacterData::Execute(const TSharedRef<FJsonObject>& Pa
 	{
 		return ExecuteUpdateCharacterData(Params);
 	}
-	// DataTable operations
 	else if (Operation == TEXT("create_stats_table"))
 	{
 		return ExecuteCreateStatsTable(Params);
@@ -59,7 +57,6 @@ FMCPToolResult FMCPTool_CharacterData::Execute(const TSharedRef<FJsonObject>& Pa
 	{
 		return ExecuteRemoveStatsRow(Params);
 	}
-	// Application
 	else if (Operation == TEXT("apply_character_data"))
 	{
 		return ExecuteApplyCharacterData(Params);
@@ -83,23 +80,19 @@ FMCPToolResult FMCPTool_CharacterData::ExecuteCreateCharacterData(const TSharedR
 
 	FString PackagePath = ExtractOptionalString(Params, TEXT("package_path"), TEXT("/Game/Characters"));
 
-	// Validate paths
 	if (!ValidateBlueprintPathParam(PackagePath, Error))
 	{
 		return Error.GetValue();
 	}
 
-	// Build full package path
 	FString FullPackagePath = PackagePath / AssetName;
 
-	// Create package
 	UPackage* Package = CreatePackage(*FullPackagePath);
 	if (!Package)
 	{
 		return FMCPToolResult::Error(FString::Printf(TEXT("Failed to create package: %s"), *FullPackagePath));
 	}
 
-	// Create the DataAsset
 	UCharacterConfigDataAsset* Config = NewObject<UCharacterConfigDataAsset>(
 		Package, FName(*AssetName), RF_Public | RF_Standalone);
 
@@ -108,10 +101,8 @@ FMCPToolResult FMCPTool_CharacterData::ExecuteCreateCharacterData(const TSharedR
 		return FMCPToolResult::Error(TEXT("Failed to create UCharacterConfigDataAsset"));
 	}
 
-	// Populate from params
 	PopulateConfigFromParams(Config, Params);
 
-	// Mark dirty and save
 	Package->MarkPackageDirty();
 	FString SaveError;
 	if (!SaveAsset(Config, SaveError))
@@ -119,7 +110,6 @@ FMCPToolResult FMCPTool_CharacterData::ExecuteCreateCharacterData(const TSharedR
 		return FMCPToolResult::Error(SaveError);
 	}
 
-	// Notify asset registry
 	FAssetRegistryModule::AssetCreated(Config);
 
 	TSharedPtr<FJsonObject> ResultData = MakeShared<FJsonObject>();
@@ -138,7 +128,6 @@ FMCPToolResult FMCPTool_CharacterData::ExecuteQueryCharacterData(const TSharedRe
 	int32 Limit = FMath::Clamp(ExtractOptionalNumber<int32>(Params, TEXT("limit"), 25), 1, 1000);
 	int32 Offset = FMath::Max(0, ExtractOptionalNumber<int32>(Params, TEXT("offset"), 0));
 
-	// Get search tags if provided
 	TArray<FString> SearchTags;
 	const TArray<TSharedPtr<FJsonValue>>* TagsArray;
 	if (Params->TryGetArrayField(TEXT("search_tags"), TagsArray))
@@ -153,7 +142,6 @@ FMCPToolResult FMCPTool_CharacterData::ExecuteQueryCharacterData(const TSharedRe
 		}
 	}
 
-	// Query asset registry
 	FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
 	IAssetRegistry& AssetRegistry = AssetRegistryModule.Get();
 
@@ -166,7 +154,6 @@ FMCPToolResult FMCPTool_CharacterData::ExecuteQueryCharacterData(const TSharedRe
 
 	for (const FAssetData& AssetData : AssetList)
 	{
-		// Filter by name if specified
 		if (!SearchName.IsEmpty())
 		{
 			FString AssetNameStr = AssetData.AssetName.ToString();
@@ -176,7 +163,7 @@ FMCPToolResult FMCPTool_CharacterData::ExecuteQueryCharacterData(const TSharedRe
 			}
 		}
 
-		// Filter by tags if specified (requires loading asset)
+		// Tag matching requires loading the asset; name-only filtering uses the registry to avoid the cost
 		if (SearchTags.Num() > 0)
 		{
 			UCharacterConfigDataAsset* Config = Cast<UCharacterConfigDataAsset>(AssetData.GetAsset());
@@ -209,7 +196,6 @@ FMCPToolResult FMCPTool_CharacterData::ExecuteQueryCharacterData(const TSharedRe
 
 		TotalMatches++;
 
-		// Apply pagination
 		if (SkippedCount < Offset)
 		{
 			SkippedCount++;
@@ -221,12 +207,10 @@ FMCPToolResult FMCPTool_CharacterData::ExecuteQueryCharacterData(const TSharedRe
 			continue;
 		}
 
-		// Build result entry
 		TSharedPtr<FJsonObject> Entry = MakeShared<FJsonObject>();
 		Entry->SetStringField(TEXT("asset_path"), AssetData.GetObjectPathString());
 		Entry->SetStringField(TEXT("asset_name"), AssetData.AssetName.ToString());
 
-		// Load to get details
 		if (UCharacterConfigDataAsset* Config = Cast<UCharacterConfigDataAsset>(AssetData.GetAsset()))
 		{
 			Entry->SetStringField(TEXT("config_id"), Config->ConfigId.ToString());
@@ -291,10 +275,8 @@ FMCPToolResult FMCPTool_CharacterData::ExecuteUpdateCharacterData(const TSharedR
 		return FMCPToolResult::Error(LoadError);
 	}
 
-	// Update from params
 	PopulateConfigFromParams(Config, Params);
 
-	// Save
 	FString SaveError;
 	if (!SaveAsset(Config, SaveError))
 	{
@@ -343,7 +325,6 @@ FMCPToolResult FMCPTool_CharacterData::ExecuteCreateStatsTable(const TSharedRef<
 		return FMCPToolResult::Error(TEXT("Failed to create UDataTable"));
 	}
 
-	// Set the row struct
 	Table->RowStruct = FCharacterStatsRow::StaticStruct();
 
 	Package->MarkPackageDirty();
@@ -392,7 +373,6 @@ FMCPToolResult FMCPTool_CharacterData::ExecuteQueryStatsTable(const TSharedRef<F
 
 	for (const FName& RowName : RowNames)
 	{
-		// Filter by row name if specified
 		if (!RowNameFilter.IsEmpty() && !RowName.ToString().Contains(RowNameFilter))
 		{
 			continue;
@@ -453,17 +433,14 @@ FMCPToolResult FMCPTool_CharacterData::ExecuteAddStatsRow(const TSharedRef<FJson
 		return FMCPToolResult::Error(LoadError);
 	}
 
-	// Check if row already exists
 	if (Table->FindRow<FCharacterStatsRow>(FName(*RowName), TEXT("")))
 	{
 		return FMCPToolResult::Error(FString::Printf(TEXT("Row '%s' already exists"), *RowName));
 	}
 
-	// Create new row
 	FCharacterStatsRow NewRow;
 	PopulateStatsRowFromParams(NewRow, Params);
 
-	// Add to table
 	Table->AddRow(FName(*RowName), NewRow);
 	Table->MarkPackageDirty();
 
@@ -510,7 +487,6 @@ FMCPToolResult FMCPTool_CharacterData::ExecuteUpdateStatsRow(const TSharedRef<FJ
 		return FMCPToolResult::Error(FString::Printf(TEXT("Row '%s' not found"), *RowName));
 	}
 
-	// Update row from params
 	PopulateStatsRowFromParams(*Row, Params);
 
 	Table->MarkPackageDirty();
@@ -602,7 +578,6 @@ FMCPToolResult FMCPTool_CharacterData::ExecuteApplyCharacterData(const TSharedRe
 		return FMCPToolResult::Error(LoadError);
 	}
 
-	// Find character
 	ACharacter* Character = nullptr;
 	for (TActorIterator<ACharacter> It(World); It; ++It)
 	{
@@ -624,7 +599,6 @@ FMCPToolResult FMCPTool_CharacterData::ExecuteApplyCharacterData(const TSharedRe
 
 	TArray<FString> AppliedSettings;
 
-	// Apply movement settings
 	if (bApplyMovement && Character->GetCharacterMovement())
 	{
 		UCharacterMovementComponent* Movement = Character->GetCharacterMovement();
@@ -637,7 +611,6 @@ FMCPToolResult FMCPTool_CharacterData::ExecuteApplyCharacterData(const TSharedRe
 		AppliedSettings.Add(TEXT("movement"));
 	}
 
-	// Apply capsule settings
 	if (UCapsuleComponent* Capsule = Character->GetCapsuleComponent())
 	{
 		Capsule->SetCapsuleRadius(Config->CapsuleRadius);
@@ -645,7 +618,6 @@ FMCPToolResult FMCPTool_CharacterData::ExecuteApplyCharacterData(const TSharedRe
 		AppliedSettings.Add(TEXT("capsule"));
 	}
 
-	// Apply mesh (if requested and available)
 	if (bApplyMesh && !Config->SkeletalMesh.IsNull())
 	{
 		if (USkeletalMesh* Mesh = Config->SkeletalMesh.LoadSynchronous())
@@ -658,7 +630,6 @@ FMCPToolResult FMCPTool_CharacterData::ExecuteApplyCharacterData(const TSharedRe
 		}
 	}
 
-	// Apply animation blueprint (if requested and available)
 	if (bApplyAnim && !Config->AnimBlueprintClass.IsNull())
 	{
 		if (UClass* AnimClass = Config->AnimBlueprintClass.LoadSynchronous())
@@ -703,7 +674,6 @@ UDataTable* FMCPTool_CharacterData::LoadStatsTable(const FString& Path, FString&
 		return nullptr;
 	}
 
-	// Verify row struct
 	if (Table->RowStruct != FCharacterStatsRow::StaticStruct())
 	{
 		OutError = FString::Printf(TEXT("DataTable '%s' does not use FCharacterStatsRow struct"), *Path);
@@ -753,13 +723,11 @@ TSharedPtr<FJsonObject> FMCPTool_CharacterData::ConfigToJson(UCharacterConfigDat
 		return Json;
 	}
 
-	// Identity
 	Json->SetStringField(TEXT("config_id"), Config->ConfigId.ToString());
 	Json->SetStringField(TEXT("display_name"), Config->DisplayName);
 	Json->SetStringField(TEXT("description"), Config->Description);
 	Json->SetBoolField(TEXT("is_player_character"), Config->bIsPlayerCharacter);
 
-	// Visuals
 	if (!Config->SkeletalMesh.IsNull())
 	{
 		Json->SetStringField(TEXT("skeletal_mesh"), Config->SkeletalMesh.ToString());
@@ -769,7 +737,6 @@ TSharedPtr<FJsonObject> FMCPTool_CharacterData::ConfigToJson(UCharacterConfigDat
 		Json->SetStringField(TEXT("anim_blueprint"), Config->AnimBlueprintClass.ToString());
 	}
 
-	// Movement
 	TSharedPtr<FJsonObject> Movement = MakeShared<FJsonObject>();
 	Movement->SetNumberField(TEXT("base_walk_speed"), Config->BaseWalkSpeed);
 	Movement->SetNumberField(TEXT("base_run_speed"), Config->BaseRunSpeed);
@@ -780,7 +747,6 @@ TSharedPtr<FJsonObject> FMCPTool_CharacterData::ConfigToJson(UCharacterConfigDat
 	Movement->SetNumberField(TEXT("base_gravity_scale"), Config->BaseGravityScale);
 	Json->SetObjectField(TEXT("movement"), Movement);
 
-	// Combat
 	TSharedPtr<FJsonObject> Combat = MakeShared<FJsonObject>();
 	Combat->SetNumberField(TEXT("base_health"), Config->BaseHealth);
 	Combat->SetNumberField(TEXT("base_stamina"), Config->BaseStamina);
@@ -788,13 +754,11 @@ TSharedPtr<FJsonObject> FMCPTool_CharacterData::ConfigToJson(UCharacterConfigDat
 	Combat->SetNumberField(TEXT("base_defense"), Config->BaseDefense);
 	Json->SetObjectField(TEXT("combat"), Combat);
 
-	// Collision
 	TSharedPtr<FJsonObject> Collision = MakeShared<FJsonObject>();
 	Collision->SetNumberField(TEXT("capsule_radius"), Config->CapsuleRadius);
 	Collision->SetNumberField(TEXT("capsule_half_height"), Config->CapsuleHalfHeight);
 	Json->SetObjectField(TEXT("collision"), Collision);
 
-	// Tags
 	TArray<TSharedPtr<FJsonValue>> TagsArray;
 	for (const FName& Tag : Config->GameplayTags)
 	{
@@ -802,7 +766,6 @@ TSharedPtr<FJsonObject> FMCPTool_CharacterData::ConfigToJson(UCharacterConfigDat
 	}
 	Json->SetArrayField(TEXT("gameplay_tags"), TagsArray);
 
-	// Stats table reference
 	if (!Config->StatsTable.IsNull())
 	{
 		Json->SetStringField(TEXT("stats_table"), Config->StatsTable.ToString());
@@ -820,24 +783,20 @@ TSharedPtr<FJsonObject> FMCPTool_CharacterData::StatsRowToJson(const FCharacterS
 	Json->SetStringField(TEXT("stats_id"), Row.StatsId.ToString());
 	Json->SetStringField(TEXT("display_name"), Row.DisplayName);
 
-	// Vitals
 	Json->SetNumberField(TEXT("base_health"), Row.BaseHealth);
 	Json->SetNumberField(TEXT("max_health"), Row.MaxHealth);
 	Json->SetNumberField(TEXT("base_stamina"), Row.BaseStamina);
 	Json->SetNumberField(TEXT("max_stamina"), Row.MaxStamina);
 
-	// Movement
 	Json->SetNumberField(TEXT("walk_speed"), Row.WalkSpeed);
 	Json->SetNumberField(TEXT("run_speed"), Row.RunSpeed);
 	Json->SetNumberField(TEXT("jump_velocity"), Row.JumpVelocity);
 
-	// Combat/Progression
 	Json->SetNumberField(TEXT("damage_multiplier"), Row.DamageMultiplier);
 	Json->SetNumberField(TEXT("defense_multiplier"), Row.DefenseMultiplier);
 	Json->SetNumberField(TEXT("xp_multiplier"), Row.XPMultiplier);
 	Json->SetNumberField(TEXT("level"), Row.Level);
 
-	// Tags
 	TArray<TSharedPtr<FJsonValue>> TagsArray;
 	for (const FName& Tag : Row.Tags)
 	{
@@ -859,7 +818,6 @@ void FMCPTool_CharacterData::PopulateConfigFromParams(UCharacterConfigDataAsset*
 	double NumVal;
 	bool BoolVal;
 
-	// Identity
 	if (Params->TryGetStringField(TEXT("config_id"), StrVal))
 	{
 		Config->ConfigId = FName(*StrVal);
@@ -877,7 +835,6 @@ void FMCPTool_CharacterData::PopulateConfigFromParams(UCharacterConfigDataAsset*
 		Config->bIsPlayerCharacter = BoolVal;
 	}
 
-	// Visuals
 	if (Params->TryGetStringField(TEXT("skeletal_mesh"), StrVal))
 	{
 		Config->SkeletalMesh = TSoftObjectPtr<USkeletalMesh>(FSoftObjectPath(StrVal));
@@ -887,7 +844,6 @@ void FMCPTool_CharacterData::PopulateConfigFromParams(UCharacterConfigDataAsset*
 		Config->AnimBlueprintClass = TSoftClassPtr<UAnimInstance>(FSoftObjectPath(StrVal));
 	}
 
-	// Movement
 	if (Params->TryGetNumberField(TEXT("base_walk_speed"), NumVal))
 	{
 		Config->BaseWalkSpeed = static_cast<float>(FMath::Clamp(NumVal, 0.0, 10000.0));
@@ -917,7 +873,6 @@ void FMCPTool_CharacterData::PopulateConfigFromParams(UCharacterConfigDataAsset*
 		Config->BaseGravityScale = static_cast<float>(FMath::Clamp(NumVal, -10.0, 10.0));
 	}
 
-	// Combat
 	if (Params->TryGetNumberField(TEXT("base_health"), NumVal))
 	{
 		Config->BaseHealth = static_cast<float>(FMath::Max(NumVal, 0.0));
@@ -935,7 +890,6 @@ void FMCPTool_CharacterData::PopulateConfigFromParams(UCharacterConfigDataAsset*
 		Config->BaseDefense = static_cast<float>(FMath::Max(NumVal, 0.0));
 	}
 
-	// Collision
 	if (Params->TryGetNumberField(TEXT("capsule_radius"), NumVal))
 	{
 		Config->CapsuleRadius = static_cast<float>(FMath::Clamp(NumVal, 1.0, 500.0));
@@ -945,7 +899,6 @@ void FMCPTool_CharacterData::PopulateConfigFromParams(UCharacterConfigDataAsset*
 		Config->CapsuleHalfHeight = static_cast<float>(FMath::Clamp(NumVal, 1.0, 500.0));
 	}
 
-	// Tags
 	const TArray<TSharedPtr<FJsonValue>>* TagsArray;
 	if (Params->TryGetArrayField(TEXT("gameplay_tags"), TagsArray))
 	{
@@ -974,7 +927,6 @@ void FMCPTool_CharacterData::PopulateStatsRowFromParams(FCharacterStatsRow& Row,
 		Row.DisplayName = StrVal;
 	}
 
-	// Vitals
 	if (Params->TryGetNumberField(TEXT("base_health"), NumVal))
 	{
 		Row.BaseHealth = static_cast<float>(FMath::Max(NumVal, 0.0));
@@ -992,7 +944,6 @@ void FMCPTool_CharacterData::PopulateStatsRowFromParams(FCharacterStatsRow& Row,
 		Row.MaxStamina = static_cast<float>(FMath::Max(NumVal, 0.0));
 	}
 
-	// Movement
 	if (Params->TryGetNumberField(TEXT("walk_speed"), NumVal))
 	{
 		Row.WalkSpeed = static_cast<float>(FMath::Clamp(NumVal, 0.0, 10000.0));
@@ -1006,7 +957,6 @@ void FMCPTool_CharacterData::PopulateStatsRowFromParams(FCharacterStatsRow& Row,
 		Row.JumpVelocity = static_cast<float>(FMath::Clamp(NumVal, 0.0, 5000.0));
 	}
 
-	// Combat/Progression
 	if (Params->TryGetNumberField(TEXT("damage_multiplier"), NumVal))
 	{
 		Row.DamageMultiplier = static_cast<float>(FMath::Clamp(NumVal, 0.0, 10.0));
@@ -1024,7 +974,6 @@ void FMCPTool_CharacterData::PopulateStatsRowFromParams(FCharacterStatsRow& Row,
 		Row.Level = FMath::Max(1, static_cast<int32>(NumVal));
 	}
 
-	// Tags
 	const TArray<TSharedPtr<FJsonValue>>* TagsArray;
 	if (Params->TryGetArrayField(TEXT("tags"), TagsArray))
 	{

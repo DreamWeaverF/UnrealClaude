@@ -3,13 +3,11 @@
 #include "MCPParamValidator.h"
 #include "UnrealClaudeConstants.h"
 
-// Use constants from centralized header
 using namespace UnrealClaudeConstants::MCPValidation;
 
 const TArray<FString>& FMCPParamValidator::GetBlockedConsoleCommands()
 {
 	static TArray<FString> BlockedCommands = {
-		// Dangerous commands that could crash or corrupt
 		TEXT("quit"),
 		TEXT("exit"),
 		TEXT("crash"),
@@ -17,34 +15,27 @@ const TArray<FString>& FMCPParamValidator::GetBlockedConsoleCommands()
 		TEXT("forcecrash"),
 		TEXT("debug crash"),
 
-		// Memory manipulation commands
 		TEXT("mem"),
 		TEXT("memreport"),
 		TEXT("obj"),
 
-		// File system commands that could be dangerous
 		TEXT("exec"),
 		TEXT("savepackage"),
 		TEXT("deletepackage"),
 
-		// Network commands that could expose security issues
 		TEXT("net"),
 		TEXT("admin"),
 
-		// Engine shutdown commands
 		TEXT("shutdown"),
 		TEXT("restartlevel"),
 		TEXT("open"),  // Could open malicious maps
 		TEXT("servertravel"),
 
-		// Debug camera can cause issues in editor
 		TEXT("toggledebugcamera"),
 		TEXT("enablecheats"),
 
-		// Potentially dangerous stat commands
 		TEXT("stat slow"),
 
-		// Commands that modify engine state dangerously
 		TEXT("gc."),
 		TEXT("r."),  // Block all rendering CVars as they can crash
 	};
@@ -66,7 +57,6 @@ bool FMCPParamValidator::ValidateActorName(const FString& Name, FString& OutErro
 		return false;
 	}
 
-	// Check for dangerous characters (optimized: avoid FString allocation in loop)
 	int32 FoundIndex;
 	for (const TCHAR* c = DangerousChars; *c; ++c)
 	{
@@ -77,7 +67,6 @@ bool FMCPParamValidator::ValidateActorName(const FString& Name, FString& OutErro
 		}
 	}
 
-	// Check for control characters
 	for (TCHAR c : Name)
 	{
 		if (c < 32 && c != TEXT('\0'))
@@ -104,7 +93,6 @@ bool FMCPParamValidator::ValidatePropertyPath(const FString& PropertyPath, FStri
 		return false;
 	}
 
-	// Property paths should only contain alphanumeric, underscore, and dot
 	for (TCHAR c : PropertyPath)
 	{
 		if (!FChar::IsAlnum(c) && c != TEXT('_') && c != TEXT('.'))
@@ -114,14 +102,12 @@ bool FMCPParamValidator::ValidatePropertyPath(const FString& PropertyPath, FStri
 		}
 	}
 
-	// Check for double dots which could indicate path traversal attempts
 	if (PropertyPath.Contains(TEXT("..")))
 	{
 		OutError = TEXT("Property path cannot contain consecutive dots");
 		return false;
 	}
 
-	// Should not start or end with a dot
 	if (PropertyPath.StartsWith(TEXT(".")) || PropertyPath.EndsWith(TEXT(".")))
 	{
 		OutError = TEXT("Property path cannot start or end with a dot");
@@ -145,8 +131,6 @@ bool FMCPParamValidator::ValidateClassPath(const FString& ClassPath, FString& Ou
 		return false;
 	}
 
-	// Check for dangerous characters (excluding / and . which are valid in paths)
-	// Optimized: avoid FString allocation in loop
 	int32 FoundIndex;
 	for (const TCHAR* c = DangerousChars; *c; ++c)
 	{
@@ -157,7 +141,6 @@ bool FMCPParamValidator::ValidateClassPath(const FString& ClassPath, FString& Ou
 		}
 	}
 
-	// Check for path traversal
 	if (ClassPath.Contains(TEXT("..")))
 	{
 		OutError = TEXT("Class path cannot contain path traversal sequences");
@@ -181,7 +164,6 @@ bool FMCPParamValidator::ValidateConsoleCommand(const FString& Command, FString&
 		return false;
 	}
 
-	// Check against blocklist
 	FString CommandLower = Command.ToLower().TrimStartAndEnd();
 
 	for (const FString& Blocked : GetBlockedConsoleCommands())
@@ -193,14 +175,12 @@ bool FMCPParamValidator::ValidateConsoleCommand(const FString& Command, FString&
 		}
 	}
 
-	// Check for command chaining attempts
 	if (Command.Contains(TEXT(";")) || Command.Contains(TEXT("|")) || Command.Contains(TEXT("&&")))
 	{
 		OutError = TEXT("Command chaining is not allowed");
 		return false;
 	}
 
-	// Check for shell escape attempts
 	if (Command.Contains(TEXT("`")) || Command.Contains(TEXT("$(")) || Command.Contains(TEXT("${")))
 	{
 		OutError = TEXT("Shell escape sequences are not allowed");
@@ -212,21 +192,18 @@ bool FMCPParamValidator::ValidateConsoleCommand(const FString& Command, FString&
 
 bool FMCPParamValidator::ValidateNumericValue(double Value, const FString& FieldName, FString& OutError, double MaxAbsValue)
 {
-	// Check for NaN
 	if (FMath::IsNaN(Value))
 	{
 		OutError = FString::Printf(TEXT("%s: NaN is not a valid value"), *FieldName);
 		return false;
 	}
 
-	// Check for infinity
 	if (!FMath::IsFinite(Value))
 	{
 		OutError = FString::Printf(TEXT("%s: Infinite values are not allowed"), *FieldName);
 		return false;
 	}
 
-	// Check bounds
 	if (FMath::Abs(Value) > MaxAbsValue)
 	{
 		OutError = FString::Printf(TEXT("%s: Value %f exceeds maximum allowed magnitude of %f"), *FieldName, Value, MaxAbsValue);
@@ -248,13 +225,11 @@ bool FMCPParamValidator::ValidateStringLength(const FString& Value, const FStrin
 
 FString FMCPParamValidator::SanitizeString(const FString& Input)
 {
-	// Build result without dangerous characters in single pass (optimized)
 	FString Output;
 	Output.Reserve(Input.Len());
 
 	for (TCHAR InputChar : Input)
 	{
-		// Check if this character is in the dangerous chars list
 		bool bIsDangerous = false;
 		for (const TCHAR* c = DangerousChars; *c; ++c)
 		{
@@ -265,7 +240,6 @@ FString FMCPParamValidator::SanitizeString(const FString& Input)
 			}
 		}
 
-		// Only keep non-dangerous, non-control characters
 		if (!bIsDangerous && (InputChar >= 32 || InputChar == TEXT('\0')))
 		{
 			Output.AppendChar(InputChar);
@@ -289,22 +263,18 @@ bool FMCPParamValidator::ValidateBlueprintPath(const FString& BlueprintPath, FSt
 		return false;
 	}
 
-	// Block engine Blueprints
 	if (BlueprintPath.StartsWith(TEXT("/Engine/")) || BlueprintPath.StartsWith(TEXT("/Script/")))
 	{
 		OutError = TEXT("Cannot access engine or script Blueprints");
 		return false;
 	}
 
-	// Check for path traversal
 	if (BlueprintPath.Contains(TEXT("..")))
 	{
 		OutError = TEXT("Blueprint path cannot contain path traversal sequences");
 		return false;
 	}
 
-	// Check for dangerous characters
-	// Optimized: avoid FString allocation in loop
 	int32 FoundIndex;
 	for (const TCHAR* c = DangerousChars; *c; ++c)
 	{
@@ -332,14 +302,12 @@ bool FMCPParamValidator::ValidateBlueprintVariableName(const FString& VariableNa
 		return false;
 	}
 
-	// Must start with letter or underscore
 	if (!FChar::IsAlpha(VariableName[0]) && VariableName[0] != TEXT('_'))
 	{
 		OutError = TEXT("Variable name must start with a letter or underscore");
 		return false;
 	}
 
-	// Only alphanumeric and underscore
 	for (TCHAR C : VariableName)
 	{
 		if (!FChar::IsAlnum(C) && C != TEXT('_'))
@@ -354,7 +322,6 @@ bool FMCPParamValidator::ValidateBlueprintVariableName(const FString& VariableNa
 
 bool FMCPParamValidator::ValidateBlueprintFunctionName(const FString& FunctionName, FString& OutError)
 {
-	// Same validation rules as variable names
 	if (FunctionName.IsEmpty())
 	{
 		OutError = TEXT("Function name cannot be empty");
@@ -367,14 +334,12 @@ bool FMCPParamValidator::ValidateBlueprintFunctionName(const FString& FunctionNa
 		return false;
 	}
 
-	// Must start with letter or underscore
 	if (!FChar::IsAlpha(FunctionName[0]) && FunctionName[0] != TEXT('_'))
 	{
 		OutError = TEXT("Function name must start with a letter or underscore");
 		return false;
 	}
 
-	// Only alphanumeric and underscore
 	for (TCHAR C : FunctionName)
 	{
 		if (!FChar::IsAlnum(C) && C != TEXT('_'))

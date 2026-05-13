@@ -5,7 +5,6 @@
 #include "CoreMinimal.h"
 #include "IClaudeRunner.h"
 
-// Forward declarations
 class FClaudeSessionManager;
 class FClaudeCodeRunner;
 

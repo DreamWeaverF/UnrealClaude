@@ -11,14 +11,12 @@
 
 FMCPToolResult FMCPTool_SetProperty::Execute(const TSharedRef<FJsonObject>& Params)
 {
-	// Validate editor context using base class
 	UWorld* World = nullptr;
 	if (auto Error = ValidateEditorContext(World))
 	{
 		return Error.GetValue();
 	}
 
-	// Extract and validate actor name using base class helper
 	FString ActorName;
 	TOptional<FMCPToolResult> ParamError;
 	if (!ExtractActorName(Params, TEXT("actor_name"), ActorName, ParamError))
@@ -26,7 +24,6 @@ FMCPToolResult FMCPTool_SetProperty::Execute(const TSharedRef<FJsonObject>& Para
 		return ParamError.GetValue();
 	}
 
-	// Extract and validate property path using base class helpers
 	FString PropertyPath;
 	if (!ExtractRequiredString(Params, TEXT("property"), PropertyPath, ParamError))
 	{
@@ -44,25 +41,21 @@ FMCPToolResult FMCPTool_SetProperty::Execute(const TSharedRef<FJsonObject>& Para
 	}
 	TSharedPtr<FJsonValue> Value = Params->TryGetField(TEXT("value"));
 
-	// Find the actor using base class helper
 	AActor* Actor = FindActorByNameOrLabel(World, ActorName);
 	if (!Actor)
 	{
 		return ActorNotFoundError(ActorName);
 	}
 
-	// Set the property
 	FString ErrorMessage;
 	if (!SetPropertyFromJson(Actor, PropertyPath, Value, ErrorMessage))
 	{
 		return FMCPToolResult::Error(ErrorMessage);
 	}
 
-	// Mark dirty using base class helper
 	Actor->MarkPackageDirty();
 	MarkWorldDirty(World);
 
-	// Build result
 	TSharedPtr<FJsonObject> ResultData = MakeShared<FJsonObject>();
 	ResultData->SetStringField(TEXT("actor"), Actor->GetName());
 	ResultData->SetStringField(TEXT("property"), PropertyPath);
@@ -88,12 +81,11 @@ bool FMCPTool_SetProperty::NavigateToProperty(
 		const FString& PartName = PathParts[i];
 		const bool bIsLastPart = (i == PathParts.Num() - 1);
 
-		// Try to find the property
 		OutProperty = OutObject->GetClass()->FindPropertyByName(FName(*PartName));
 
 		if (!OutProperty)
 		{
-			// Try finding as component on actors
+			// On actors, allow component names as path segments (e.g. "MeshComp.StaticMesh")
 			if (!TryNavigateToComponent(OutObject, PartName, bIsLastPart, OutError))
 			{
 				if (!OutError.IsEmpty())
@@ -111,7 +103,6 @@ bool FMCPTool_SetProperty::NavigateToProperty(
 			{
 				OutError = FString::Printf(TEXT("Property not found: '%s' on %s."), *PartName, *OutObject->GetClass()->GetName());
 
-				// List available properties (cap at 20)
 				TArray<FString> AvailableProps;
 				for (TFieldIterator<FProperty> It(OutObject->GetClass()); It; ++It)
 				{
@@ -123,7 +114,6 @@ bool FMCPTool_SetProperty::NavigateToProperty(
 					OutError += FString::Printf(TEXT(" Available: %s"), *FString::Join(AvailableProps, TEXT(", ")));
 				}
 
-				// List available components if actor
 				if (AActor* AsActor = Cast<AActor>(OutObject))
 				{
 					TArray<FString> CompNames;
@@ -145,7 +135,6 @@ bool FMCPTool_SetProperty::NavigateToProperty(
 			continue;
 		}
 
-		// If not the last part, navigate into nested object
 		if (!bIsLastPart)
 		{
 			if (!NavigateIntoNestedObject(OutObject, OutProperty, PartName, OutError))
@@ -300,7 +289,6 @@ bool FMCPTool_SetProperty::SetStructPropertyValue(FStructProperty* StructProp, v
 		}
 	}
 
-	// Try object format
 	const TSharedPtr<FJsonObject>* ObjVal;
 	if (!Value->TryGetObject(ObjVal))
 	{
@@ -448,8 +436,6 @@ bool FMCPTool_SetProperty::SetPropertyFromJson(UObject* Object, const FString& P
 		return false;
 	}
 
-	// Parse property path into components for traversal
-	// Example: "StaticMeshComponent.RelativeLocation.X" -> ["StaticMeshComponent", "RelativeLocation", "X"]
 	TArray<FString> PathParts;
 	PropertyPath.ParseIntoArray(PathParts, TEXT("."), true);
 
@@ -465,16 +451,13 @@ bool FMCPTool_SetProperty::SetPropertyFromJson(UObject* Object, const FString& P
 		return false;
 	}
 
-	// Get property address and set value based on type
 	void* ValuePtr = Property->ContainerPtrToValuePtr<void>(TargetObject);
 	bool bPropertySet = false;
 
-	// Try numeric property
 	if (FNumericProperty* NumProp = CastField<FNumericProperty>(Property))
 	{
 		bPropertySet = SetNumericPropertyValue(NumProp, ValuePtr, Value);
 	}
-	// Try bool property
 	else if (FBoolProperty* BoolProp = CastField<FBoolProperty>(Property))
 	{
 		bool BoolVal = false;
@@ -502,7 +485,6 @@ bool FMCPTool_SetProperty::SetPropertyFromJson(UObject* Object, const FString& P
 			}
 		}
 	}
-	// Try string property
 	else if (FStrProperty* StrProp = CastField<FStrProperty>(Property))
 	{
 		FString StrVal;
@@ -512,7 +494,6 @@ bool FMCPTool_SetProperty::SetPropertyFromJson(UObject* Object, const FString& P
 			bPropertySet = true;
 		}
 	}
-	// Try name property
 	else if (FNameProperty* NameProp = CastField<FNameProperty>(Property))
 	{
 		FString StrVal;
@@ -522,7 +503,6 @@ bool FMCPTool_SetProperty::SetPropertyFromJson(UObject* Object, const FString& P
 			bPropertySet = true;
 		}
 	}
-	// Try object property (TObjectPtr<T>, UObject* references)
 	else if (FObjectProperty* ObjProp = CastField<FObjectProperty>(Property))
 	{
 		if (!SetObjectPropertyValue(ObjProp, ValuePtr, Value, OutError))
@@ -531,7 +511,6 @@ bool FMCPTool_SetProperty::SetPropertyFromJson(UObject* Object, const FString& P
 		}
 		bPropertySet = true;
 	}
-	// Try struct property
 	else if (FStructProperty* StructProp = CastField<FStructProperty>(Property))
 	{
 		bPropertySet = SetStructPropertyValue(StructProp, ValuePtr, Value);
@@ -564,7 +543,6 @@ bool FMCPTool_SetProperty::SetPropertyFromJson(UObject* Object, const FString& P
 
 bool FMCPTool_SetProperty::SetObjectPropertyValue(FObjectProperty* ObjProp, void* ValuePtr, const TSharedPtr<FJsonValue>& Value, FString& OutError)
 {
-	// Value should be a string path to the object
 	FString ObjectPath;
 	if (!Value->TryGetString(ObjectPath))
 	{
@@ -572,14 +550,13 @@ bool FMCPTool_SetProperty::SetObjectPropertyValue(FObjectProperty* ObjProp, void
 		return false;
 	}
 
-	// Handle "None" or empty as null
+	// Empty or "None" clears the reference
 	if (ObjectPath.IsEmpty() || ObjectPath.Equals(TEXT("None"), ESearchCase::IgnoreCase))
 	{
 		ObjProp->SetObjectPropertyValue(ValuePtr, nullptr);
 		return true;
 	}
 
-	// Load the referenced object
 	UObject* ReferencedObject = LoadObject<UObject>(nullptr, *ObjectPath);
 	if (!ReferencedObject)
 	{
@@ -587,7 +564,6 @@ bool FMCPTool_SetProperty::SetObjectPropertyValue(FObjectProperty* ObjProp, void
 		return false;
 	}
 
-	// Verify type compatibility
 	if (!ReferencedObject->IsA(ObjProp->PropertyClass))
 	{
 		OutError = FString::Printf(TEXT("Object type mismatch. Expected %s, got %s"),

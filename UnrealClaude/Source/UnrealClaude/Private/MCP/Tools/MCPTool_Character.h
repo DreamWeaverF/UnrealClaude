@@ -5,7 +5,6 @@
 #include "CoreMinimal.h"
 #include "MCP/MCPToolBase.h"
 
-// Forward declarations
 class ACharacter;
 class UCharacterMovementComponent;
 
@@ -49,15 +48,12 @@ public:
 			"- braking_deceleration_walking, braking_friction"
 		);
 		Info.Parameters = {
-			// Operation selector
 			FMCPToolParameter(TEXT("operation"), TEXT("string"),
 				TEXT("Operation to perform (see description)"), true),
 
-			// Character identification
 			FMCPToolParameter(TEXT("character_name"), TEXT("string"),
 				TEXT("Character actor name or label (required for single-character ops)"), false),
 
-			// For list_characters filtering
 			FMCPToolParameter(TEXT("class_filter"), TEXT("string"),
 				TEXT("Filter by character class name (e.g., 'BP_PlayerCharacter')"), false),
 			FMCPToolParameter(TEXT("limit"), TEXT("number"),
@@ -65,7 +61,6 @@ public:
 			FMCPToolParameter(TEXT("offset"), TEXT("number"),
 				TEXT("Skip first N results (default: 0)"), false, TEXT("0")),
 
-			// Movement parameter modifications
 			FMCPToolParameter(TEXT("max_walk_speed"), TEXT("number"),
 				TEXT("Maximum walking speed (cm/s)"), false),
 			FMCPToolParameter(TEXT("max_acceleration"), TEXT("number"),
@@ -87,11 +82,10 @@ public:
 			FMCPToolParameter(TEXT("braking_friction"), TEXT("number"),
 				TEXT("Braking friction coefficient"), false),
 
-			// For get_components filtering
 			FMCPToolParameter(TEXT("component_class"), TEXT("string"),
 				TEXT("Filter components by class name"), false)
 		};
-		// Mixed: query ops are read-only, set_movement_params is modifying
+		// Mixed read-only and modifying ops — annotate as Modifying because set_movement_params writes state
 		Info.Annotations = FMCPToolAnnotations::Modifying();
 		return Info;
 	}
@@ -99,14 +93,12 @@ public:
 	virtual FMCPToolResult Execute(const TSharedRef<FJsonObject>& Params) override;
 
 private:
-	// Operation handlers
 	FMCPToolResult ExecuteListCharacters(const TSharedRef<FJsonObject>& Params);
 	FMCPToolResult ExecuteGetCharacterInfo(const TSharedRef<FJsonObject>& Params);
 	FMCPToolResult ExecuteGetMovementParams(const TSharedRef<FJsonObject>& Params);
 	FMCPToolResult ExecuteSetMovementParams(const TSharedRef<FJsonObject>& Params);
 	FMCPToolResult ExecuteGetComponents(const TSharedRef<FJsonObject>& Params);
 
-	// Helper methods
 	ACharacter* FindCharacterByName(UWorld* World, const FString& NameOrLabel, FString& OutError);
 	TSharedPtr<FJsonObject> CharacterToJson(ACharacter* Character, bool bIncludeMovement = false);
 	TSharedPtr<FJsonObject> MovementComponentToJson(UCharacterMovementComponent* Movement);

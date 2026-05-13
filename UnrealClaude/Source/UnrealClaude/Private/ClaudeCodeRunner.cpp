@@ -86,7 +86,6 @@ FString FClaudeCodeRunner::GetClaudePath()
 	// Allow re-search if previous search failed (CachedClaudePath is empty)
 	bHasSearched = true;
 
-	// Check common locations for claude CLI
 	TArray<FString> PossiblePaths;
 
 #if PLATFORM_WINDOWS
@@ -117,7 +116,7 @@ FString FClaudeCodeRunner::GetClaudePath()
 		PossiblePaths.Add(FPaths::Combine(UserProfile, TEXT("AppData"), TEXT("Roaming"), TEXT("npm"), TEXT("claude.cmd")));
 	}
 
-	// Check PATH - try to find claude.cmd or claude.exe
+	// Scan every PATH directory for claude.cmd or claude.exe as a last resort
 	FString PathEnv = FPlatformMisc::GetEnvironmentVariable(TEXT("PATH"));
 	TArray<FString> PathDirs;
 	PathEnv.ParseIntoArray(PathDirs, TEXT(";"), true);
@@ -148,7 +147,7 @@ FString FClaudeCodeRunner::GetClaudePath()
 		PossiblePaths.Add(FPaths::Combine(Home, TEXT(".nvm"), TEXT("versions"), TEXT("node")));
 	}
 
-	// Check PATH
+	// Scan every PATH directory as a last resort
 	FString PathEnv = FPlatformMisc::GetEnvironmentVariable(TEXT("PATH"));
 	TArray<FString> PathDirs;
 	PathEnv.ParseIntoArray(PathDirs, TEXT(":"), true);
@@ -159,7 +158,6 @@ FString FClaudeCodeRunner::GetClaudePath()
 	}
 #endif
 
-	// Check each path
 	for (const FString& Path : PossiblePaths)
 	{
 		if (IFileManager::Get().FileExists(*Path))
@@ -263,7 +261,6 @@ bool FClaudeCodeRunner::ExecuteSync(const FClaudeRequestConfig& Config, FString&
 	FString StdErr;
 	int32 ReturnCode;
 
-	// Set working directory
 	FString WorkingDir = Config.WorkingDirectory;
 	if (WorkingDir.IsEmpty())
 	{
@@ -469,7 +466,6 @@ FString FClaudeCodeRunner::BuildStreamJsonPayload(const FString& TextPrompt, con
 			continue;
 		}
 
-		// Check per-file size
 		const int64 FileSize = IFileManager::Get().FileSize(*FullImagePath);
 		if (FileSize > MaxImageFileSize)
 		{
@@ -478,7 +474,6 @@ FString FClaudeCodeRunner::BuildStreamJsonPayload(const FString& TextPrompt, con
 			continue;
 		}
 
-		// Check total payload size
 		if (TotalImageBytes + FileSize > MaxTotalImagePayloadSize)
 		{
 			UE_LOG(LogUnrealClaude, Warning, TEXT("Skipping image (total payload would exceed %lld bytes): %s"),
@@ -486,7 +481,6 @@ FString FClaudeCodeRunner::BuildStreamJsonPayload(const FString& TextPrompt, con
 			continue;
 		}
 
-		// Load and base64 encode the PNG
 		TArray<uint8> ImageData;
 		if (!FFileHelper::LoadFileToArray(ImageData, *FullImagePath))
 		{
@@ -1259,7 +1253,6 @@ FString FClaudeCodeRunner::ReadProcessOutput()
 
 	while (!StopTaskCounter.GetValue())
 	{
-		// Read any available output from the pipe
 		FString OutputChunk = FPlatformProcess::ReadPipe(ReadPipe);
 
 		if (!OutputChunk.IsEmpty())
@@ -1267,7 +1260,7 @@ FString FClaudeCodeRunner::ReadProcessOutput()
 			RecordPipeActivity();
 			FullOutput += OutputChunk;
 
-			// Parse NDJSON line-by-line: buffer chunks and split on newlines
+			// NDJSON is line-delimited: buffer chunks until a newline, then split
 			NdjsonLineBuffer += OutputChunk;
 
 			int32 NewlineIdx;
@@ -1288,10 +1281,9 @@ FString FClaudeCodeRunner::ReadProcessOutput()
 			MaybeFireSilenceWatchdog(FPlatformTime::Seconds());
 		}
 
-		// Check if process has exited
 		if (!FPlatformProcess::IsProcRunning(ProcessHandle))
 		{
-			// Process finished - read any remaining output
+			// Drain any output the child wrote between our last read and its exit
 			FString RemainingOutput = FPlatformProcess::ReadPipe(ReadPipe);
 			while (!RemainingOutput.IsEmpty())
 			{
@@ -1301,7 +1293,6 @@ FString FClaudeCodeRunner::ReadProcessOutput()
 				RemainingOutput = FPlatformProcess::ReadPipe(ReadPipe);
 			}
 
-			// Parse all remaining buffered lines
 			int32 FinalNewlineIdx;
 			while (NdjsonLineBuffer.FindChar(TEXT('\n'), FinalNewlineIdx))
 			{
@@ -1337,7 +1328,7 @@ FString FClaudeCodeRunner::ReadProcessOutput()
 			break;
 		}
 
-		// Brief sleep to avoid busy-waiting
+		// Brief sleep to avoid busy-waiting the read loop
 		FPlatformProcess::Sleep(0.01f);
 	}
 
@@ -1368,7 +1359,6 @@ void FClaudeCodeRunner::ExecuteProcess()
 {
 	FString ClaudePath = GetClaudePath();
 
-	// Verify the path exists
 	if (ClaudePath.IsEmpty())
 	{
 		ReportError(TEXT("Claude CLI not found. Please install with: npm install -g @anthropic-ai/claude-code"));
@@ -1394,7 +1384,6 @@ void FClaudeCodeRunner::ExecuteProcess()
 		WorkingDir = FPaths::ConvertRelativePathToFull(FPaths::ProjectDir());
 	}
 
-	// Create pipes for stdout capture
 	if (!CreateProcessPipes())
 	{
 		ReportError(TEXT("Failed to create pipe for Claude process"));
@@ -1448,7 +1437,6 @@ void FClaudeCodeRunner::ExecuteProcess()
 		// Cache the stdin payload for the silence watchdog diagnostic.
 		LastStdinPayload = StdinPayload;
 
-		// Write to stdin
 		if (!StdinPayload.IsEmpty())
 		{
 			FTCHARToUTF8 Utf8Payload(*StdinPayload);
@@ -1466,7 +1454,6 @@ void FClaudeCodeRunner::ExecuteProcess()
 		StdInWritePipe = nullptr;
 	}
 
-	// Clear temp file paths
 	SystemPromptFilePath.Empty();
 	PromptFilePath.Empty();
 
@@ -1484,11 +1471,9 @@ void FClaudeCodeRunner::ExecuteProcess()
 			ResponseText.Len());
 	}
 
-	// Get exit code
 	int32 ExitCode = 0;
 	FPlatformProcess::GetProcReturnCode(ProcessHandle, &ExitCode);
 
-	// Cleanup handles
 	if (ReadPipe || WritePipe)
 	{
 		FPlatformProcess::ClosePipe(ReadPipe, WritePipe);

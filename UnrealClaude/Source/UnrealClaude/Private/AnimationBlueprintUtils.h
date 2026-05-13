@@ -6,12 +6,10 @@
 #include "Animation/AnimBlueprint.h"
 #include "Dom/JsonObject.h"
 
-// Include sub-modules
 #include "AnimStateMachineEditor.h"
 #include "AnimGraphEditor.h"
 #include "AnimAssetManager.h"
 
-// Forward declarations for ASCII diagram generation
 class UAnimStateTransitionNode;
 
 /**
@@ -517,10 +515,9 @@ private:
 	static bool MatchesPattern(const FString& StateName, const TSharedPtr<FJsonValue>& Pattern);
 	static bool MatchesWildcard(const FString& StateName, const FString& Pattern);
 	static bool MatchesRegex(const FString& StateName, const FString& Pattern);
-	// Internal helpers
+
 	static bool ValidateAnimBlueprintForOperation(UAnimBlueprint* AnimBP, FString& OutError);
 
-	// ASCII diagram helpers
 	struct FDiagramState
 	{
 		FString Name;

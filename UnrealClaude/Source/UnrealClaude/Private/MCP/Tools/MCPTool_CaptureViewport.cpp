@@ -13,12 +13,10 @@
 
 namespace
 {
-	// Target resolution
 	constexpr int32 TargetWidth = 1024;
 	constexpr int32 TargetHeight = 576;
 	constexpr int32 JPEGQuality = 70;
 
-	// Simple bilinear resize
 	void ResizePixels(const TArray<FColor>& InPixels, int32 InWidth, int32 InHeight,
 		TArray<FColor>& OutPixels, int32 OutWidth, int32 OutHeight)
 	{
@@ -41,13 +39,12 @@ namespace
 
 FMCPToolResult FMCPTool_CaptureViewport::Execute(const TSharedRef<FJsonObject>& Params)
 {
-	// Validate editor is available
 	if (!GEditor)
 	{
 		return FMCPToolResult::Error(TEXT("Editor is not available."));
 	}
 
-	// Get viewport - PIE first, then editor
+	// Prefer PIE viewport when active; falls back to the editor viewport
 	FViewport* Viewport = GEditor->GetPIEViewport();
 	FString ViewportType = TEXT("PIE");
 
@@ -62,32 +59,27 @@ FMCPToolResult FMCPTool_CaptureViewport::Execute(const TSharedRef<FJsonObject>& 
 		return FMCPToolResult::Error(TEXT("No viewport available. Open a level or start PIE."));
 	}
 
-	// Get viewport size
 	const FIntPoint ViewportSize = Viewport->GetSizeXY();
 	if (ViewportSize.X <= 0 || ViewportSize.Y <= 0)
 	{
 		return FMCPToolResult::Error(TEXT("Viewport has invalid size."));
 	}
 
-	// Read pixels from viewport
 	TArray<FColor> Pixels;
 	if (!Viewport->ReadPixels(Pixels))
 	{
 		return FMCPToolResult::Error(TEXT("Failed to read viewport pixels."));
 	}
 
-	// Validate pixel array size
 	const int32 ExpectedPixels = ViewportSize.X * ViewportSize.Y;
 	if (Pixels.Num() != ExpectedPixels)
 	{
 		return FMCPToolResult::Error(TEXT("Pixel array size mismatch."));
 	}
 
-	// Resize to target resolution
 	TArray<FColor> ResizedPixels;
 	ResizePixels(Pixels, ViewportSize.X, ViewportSize.Y, ResizedPixels, TargetWidth, TargetHeight);
 
-	// Compress to JPEG
 	IImageWrapperModule& ImageWrapperModule = FModuleManager::LoadModuleChecked<IImageWrapperModule>("ImageWrapper");
 	TSharedPtr<IImageWrapper> ImageWrapper = ImageWrapperModule.CreateImageWrapper(EImageFormat::JPEG);
 
@@ -96,21 +88,20 @@ FMCPToolResult FMCPTool_CaptureViewport::Execute(const TSharedRef<FJsonObject>& 
 		return FMCPToolResult::Error(TEXT("Failed to create image wrapper."));
 	}
 
-	// Set raw pixel data (BGRA format from FColor)
+	// FColor is BGRA on little-endian platforms — declare BGRA so JPEG encoder doesn't swap channels
 	if (!ImageWrapper->SetRaw(ResizedPixels.GetData(), ResizedPixels.Num() * sizeof(FColor),
 		TargetWidth, TargetHeight, ERGBFormat::BGRA, 8))
 	{
 		return FMCPToolResult::Error(TEXT("Failed to set image data."));
 	}
 
-	// Get compressed JPEG data (UE 5.7 API returns TArray64 directly)
+	// UE 5.7 ImageWrapper returns TArray64 directly (not via out-param like 5.6 and earlier)
 	TArray64<uint8> CompressedData = ImageWrapper->GetCompressed(JPEGQuality);
 	if (CompressedData.Num() == 0)
 	{
 		return FMCPToolResult::Error(TEXT("Failed to compress image to JPEG."));
 	}
 
-	// Encode to base64
 	const FString Base64Image = FBase64::Encode(CompressedData.GetData(), CompressedData.Num());
 
 	// Sidecar metadata. image_base64 is no longer set here — BuildToolResultJson

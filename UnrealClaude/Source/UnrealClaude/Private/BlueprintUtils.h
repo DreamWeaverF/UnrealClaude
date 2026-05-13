@@ -22,7 +22,6 @@
 #include "Dom/JsonObject.h"
 #include "EdGraph/EdGraph.h"
 
-// Include the split modules
 #include "BlueprintLoader.h"
 #include "BlueprintEditor.h"
 #include "BlueprintGraphEditor.h"

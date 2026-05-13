@@ -38,8 +38,6 @@ public:
 	UPROPERTY(EditAnywhere, Config, Category="Scripts", meta=(DisplayName="Auto-approve script execution"))
 	bool bAutoApproveScripts = false;
 
-	// UDeveloperSettings overrides
-
 	virtual FName GetCategoryName() const override { return TEXT("Plugins"); }
 
 #if WITH_EDITOR

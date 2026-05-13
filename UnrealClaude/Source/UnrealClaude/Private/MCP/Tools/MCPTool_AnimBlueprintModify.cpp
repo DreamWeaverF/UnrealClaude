@@ -7,7 +7,6 @@
 
 FMCPToolResult FMCPTool_AnimBlueprintModify::Execute(const TSharedRef<FJsonObject>& Params)
 {
-	// Extract required parameters
 	FString BlueprintPath;
 	TOptional<FMCPToolResult> Error;
 	if (!ExtractRequiredString(Params, TEXT("blueprint_path"), BlueprintPath, Error))
@@ -15,7 +14,6 @@ FMCPToolResult FMCPTool_AnimBlueprintModify::Execute(const TSharedRef<FJsonObjec
 		return Error.GetValue();
 	}
 
-	// Validate blueprint path for security (block engine paths, path traversal, etc.)
 	if (!ValidateBlueprintPathParam(BlueprintPath, Error))
 	{
 		return Error.GetValue();
@@ -27,7 +25,6 @@ FMCPToolResult FMCPTool_AnimBlueprintModify::Execute(const TSharedRef<FJsonObjec
 		return Error.GetValue();
 	}
 
-	// Route to appropriate handler
 	if (Operation == TEXT("get_info"))
 	{
 		return HandleGetInfo(BlueprintPath);
@@ -100,7 +97,6 @@ FMCPToolResult FMCPTool_AnimBlueprintModify::Execute(const TSharedRef<FJsonObjec
 	{
 		return HandleBatch(BlueprintPath, Params);
 	}
-	// NEW operations for enhanced pin/node introspection
 	else if (Operation == TEXT("get_transition_nodes"))
 	{
 		return HandleGetTransitionNodes(BlueprintPath, Params);
@@ -125,7 +121,6 @@ FMCPToolResult FMCPTool_AnimBlueprintModify::Execute(const TSharedRef<FJsonObjec
 	{
 		return HandleGetStateMachineDiagram(BlueprintPath, Params);
 	}
-	// Bulk operation for setting up multiple transition conditions
 	else if (Operation == TEXT("setup_transition_conditions"))
 	{
 		return HandleSetupTransitionConditions(BlueprintPath, Params);
@@ -219,7 +214,6 @@ FMCPToolResult FMCPTool_AnimBlueprintModify::HandleCreateStateMachine(const FStr
 		return FMCPToolResult::Error(Error);
 	}
 
-	// Compile
 	FAnimationBlueprintUtils::CompileAnimBlueprint(AnimBP, Error);
 
 	TSharedPtr<FJsonObject> Result = MakeShared<FJsonObject>();
@@ -499,7 +493,6 @@ FMCPToolResult FMCPTool_AnimBlueprintModify::HandleAddConditionNode(const FStrin
 		return FMCPToolResult::Error(TEXT("state_machine, from_state, to_state, and node_type parameters required"));
 	}
 
-	// Get node params
 	TSharedPtr<FJsonObject> NodeParams = MakeShared<FJsonObject>();
 	const TSharedPtr<FJsonObject>* ParamsObj;
 	if (Params->TryGetObjectField(TEXT("node_params"), ParamsObj))
@@ -713,13 +706,12 @@ FMCPToolResult FMCPTool_AnimBlueprintModify::HandleSetStateAnimation(const FStri
 	else if (AnimType == TEXT("blendspace1d"))
 	{
 		FString Binding = ExtractOptionalString(Params, TEXT("parameter_bindings"));
-		// Also try getting from object if it was passed that way
+		// parameter_bindings may arrive as a string OR an object — accept both; for object take the first value
 		if (Binding.IsEmpty())
 		{
 			const TSharedPtr<FJsonObject>* BindingsObj;
 			if (Params->TryGetObjectField(TEXT("parameter_bindings"), BindingsObj))
 			{
-				// Get first value as the binding
 				for (const auto& Pair : (*BindingsObj)->Values)
 				{
 					Binding = Pair.Value->AsString();
@@ -762,7 +754,7 @@ FMCPToolResult FMCPTool_AnimBlueprintModify::HandleFindAnimations(const FString&
 	FString Error;
 	UAnimBlueprint* AnimBP = nullptr;
 
-	// AnimBlueprint is optional for this operation - used for skeleton filtering
+	// AnimBlueprint is optional here — when supplied it filters results to its skeleton
 	if (!BlueprintPath.IsEmpty() && BlueprintPath != TEXT("*"))
 	{
 		AnimBP = FAnimationBlueprintUtils::LoadAnimBlueprint(BlueprintPath, Error);
@@ -807,7 +799,7 @@ FMCPToolResult FMCPTool_AnimBlueprintModify::HandleBatch(const FString& Blueprin
 
 	if (!Result->GetBoolField(TEXT("success")))
 	{
-		// Still return the partial results with the error
+		// Batch reports partial success — return as Success so caller sees per-op results, not a hard error
 		return FMCPToolResult::Success(TEXT("Batch operation completed with errors"), Result);
 	}
 
@@ -1000,7 +992,7 @@ FMCPToolResult FMCPTool_AnimBlueprintModify::HandleGetStateMachineDiagram(
 		return FMCPToolResult::Error(Error.IsEmpty() ? TEXT("Failed to generate diagram") : Error);
 	}
 
-	// Return ASCII diagram in message for easy viewing, with full JSON data
+	// Surface the ASCII diagram as the message so terminal viewers see it directly
 	FString AsciiDiagram = Result->GetStringField(TEXT("ascii_diagram"));
 	return FMCPToolResult::Success(AsciiDiagram, Result);
 }
@@ -1015,14 +1007,12 @@ FMCPToolResult FMCPTool_AnimBlueprintModify::HandleSetupTransitionConditions(
 		return ErrorResult.GetValue();
 	}
 
-	// Extract required parameters
 	FString StateMachineName = ExtractOptionalString(Params, TEXT("state_machine"));
 	if (StateMachineName.IsEmpty())
 	{
 		return FMCPToolResult::Error(TEXT("state_machine parameter required"));
 	}
 
-	// Get rules array
 	const TArray<TSharedPtr<FJsonValue>>* RulesArray;
 	if (!Params->TryGetArrayField(TEXT("rules"), RulesArray))
 	{
@@ -1043,11 +1033,10 @@ FMCPToolResult FMCPTool_AnimBlueprintModify::HandleSetupTransitionConditions(
 		FString ErrorMsg = Result->HasField(TEXT("error"))
 			? Result->GetStringField(TEXT("error"))
 			: TEXT("Unknown error setting up transition conditions");
-		// Return partial results with error
+		// Return Success (not Error) so partial results in `Result` reach the caller
 		return FMCPToolResult::Success(ErrorMsg, Result);
 	}
 
-	// Build success message with statistics
 	int32 RulesProcessed = static_cast<int32>(Result->GetNumberField(TEXT("rules_processed")));
 	int32 TransitionsModified = static_cast<int32>(Result->GetNumberField(TEXT("transitions_modified")));
 

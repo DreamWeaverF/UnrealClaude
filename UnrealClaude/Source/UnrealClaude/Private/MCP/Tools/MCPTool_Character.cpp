@@ -69,7 +69,6 @@ FMCPToolResult FMCPTool_Character::ExecuteListCharacters(const TSharedRef<FJsonO
 			continue;
 		}
 
-		// Apply class filter if specified
 		if (!ClassFilter.IsEmpty())
 		{
 			FString ClassName = Character->GetClass()->GetName();
@@ -81,7 +80,6 @@ FMCPToolResult FMCPTool_Character::ExecuteListCharacters(const TSharedRef<FJsonO
 
 		TotalCount++;
 
-		// Apply pagination
 		if (SkippedCount < Offset)
 		{
 			SkippedCount++;
@@ -90,7 +88,7 @@ FMCPToolResult FMCPTool_Character::ExecuteListCharacters(const TSharedRef<FJsonO
 
 		if (CharacterArray.Num() >= Limit)
 		{
-			continue; // Still count but don't add
+			continue; // Keep iterating to compute TotalCount accurately for pagination metadata
 		}
 
 		CharacterArray.Add(MakeShared<FJsonValueObject>(CharacterToJson(Character)));
@@ -133,7 +131,6 @@ FMCPToolResult FMCPTool_Character::ExecuteGetCharacterInfo(const TSharedRef<FJso
 
 	TSharedPtr<FJsonObject> CharacterData = CharacterToJson(Character, true);
 
-	// Add detailed mesh info
 	if (USkeletalMeshComponent* MeshComp = Character->GetMesh())
 	{
 		TSharedPtr<FJsonObject> MeshInfo = MakeShared<FJsonObject>();
@@ -146,7 +143,6 @@ FMCPToolResult FMCPTool_Character::ExecuteGetCharacterInfo(const TSharedRef<FJso
 		CharacterData->SetObjectField(TEXT("skeletal_mesh"), MeshInfo);
 	}
 
-	// Add capsule info
 	if (UCapsuleComponent* Capsule = Character->GetCapsuleComponent())
 	{
 		TSharedPtr<FJsonObject> CapsuleInfo = MakeShared<FJsonObject>();
@@ -155,7 +151,6 @@ FMCPToolResult FMCPTool_Character::ExecuteGetCharacterInfo(const TSharedRef<FJso
 		CharacterData->SetObjectField(TEXT("capsule"), CapsuleInfo);
 	}
 
-	// Add animation info
 	if (USkeletalMeshComponent* MeshComp = Character->GetMesh())
 	{
 		if (UAnimInstance* AnimInstance = MeshComp->GetAnimInstance())
@@ -240,10 +235,8 @@ FMCPToolResult FMCPTool_Character::ExecuteSetMovementParams(const TSharedRef<FJs
 		return FMCPToolResult::Error(TEXT("Character has no CharacterMovementComponent"));
 	}
 
-	// Track what was modified
 	TArray<FString> ModifiedParams;
 
-	// Apply movement parameter modifications
 	double Value;
 
 	if (Params->TryGetNumberField(TEXT("max_walk_speed"), Value))
@@ -358,7 +351,6 @@ FMCPToolResult FMCPTool_Character::ExecuteGetComponents(const TSharedRef<FJsonOb
 			continue;
 		}
 
-		// Apply class filter if specified
 		if (!ComponentClassFilter.IsEmpty())
 		{
 			FString ClassName = Component->GetClass()->GetName();
@@ -414,21 +406,17 @@ TSharedPtr<FJsonObject> FMCPTool_Character::CharacterToJson(ACharacter* Characte
 		return Json;
 	}
 
-	// Basic actor info
 	Json->SetStringField(TEXT("name"), Character->GetName());
 	Json->SetStringField(TEXT("label"), Character->GetActorLabel());
 	Json->SetStringField(TEXT("class"), Character->GetClass()->GetName());
 	Json->SetStringField(TEXT("class_path"), Character->GetClass()->GetPathName());
 
-	// Transform
 	Json->SetObjectField(TEXT("location"), UnrealClaudeJsonUtils::VectorToJson(Character->GetActorLocation()));
 	Json->SetObjectField(TEXT("rotation"), UnrealClaudeJsonUtils::RotatorToJson(Character->GetActorRotation()));
 
-	// Character state
 	Json->SetBoolField(TEXT("can_jump"), Character->CanJump());
 	Json->SetBoolField(TEXT("is_crouched"), Character->bIsCrouched);
 
-	// Optional movement details
 	if (bIncludeMovement && Character->GetCharacterMovement())
 	{
 		Json->SetObjectField(TEXT("movement"), MovementComponentToJson(Character->GetCharacterMovement()));
@@ -446,34 +434,28 @@ TSharedPtr<FJsonObject> FMCPTool_Character::MovementComponentToJson(UCharacterMo
 		return Json;
 	}
 
-	// Walking/Running
 	Json->SetNumberField(TEXT("max_walk_speed"), Movement->MaxWalkSpeed);
 	Json->SetNumberField(TEXT("max_walk_speed_crouched"), Movement->MaxWalkSpeedCrouched);
 	Json->SetNumberField(TEXT("max_acceleration"), Movement->MaxAcceleration);
 	Json->SetNumberField(TEXT("ground_friction"), Movement->GroundFriction);
 
-	// Jumping/Air
 	Json->SetNumberField(TEXT("jump_z_velocity"), Movement->JumpZVelocity);
 	Json->SetNumberField(TEXT("air_control"), Movement->AirControl);
 	Json->SetNumberField(TEXT("air_control_boost_multiplier"), Movement->AirControlBoostMultiplier);
 	Json->SetNumberField(TEXT("gravity_scale"), Movement->GravityScale);
 
-	// Step/Slope
 	Json->SetNumberField(TEXT("max_step_height"), Movement->MaxStepHeight);
 	Json->SetNumberField(TEXT("walkable_floor_angle"), Movement->GetWalkableFloorAngle());
 	Json->SetNumberField(TEXT("walkable_floor_z"), Movement->GetWalkableFloorZ());
 
-	// Braking
 	Json->SetNumberField(TEXT("braking_deceleration_walking"), Movement->BrakingDecelerationWalking);
 	Json->SetNumberField(TEXT("braking_deceleration_falling"), Movement->BrakingDecelerationFalling);
 	Json->SetNumberField(TEXT("braking_friction"), Movement->BrakingFriction);
 	Json->SetBoolField(TEXT("use_separate_braking_friction"), Movement->bUseSeparateBrakingFriction);
 
-	// Swimming/Flying
 	Json->SetNumberField(TEXT("max_swim_speed"), Movement->MaxSwimSpeed);
 	Json->SetNumberField(TEXT("max_fly_speed"), Movement->MaxFlySpeed);
 
-	// Current state
 	FString MovementModeStr;
 	switch (Movement->MovementMode)
 	{
@@ -505,7 +487,6 @@ TSharedPtr<FJsonObject> FMCPTool_Character::ComponentToJson(UActorComponent* Com
 	Json->SetStringField(TEXT("class"), Component->GetClass()->GetName());
 	Json->SetBoolField(TEXT("active"), Component->IsActive());
 
-	// Add scene component details if applicable
 	if (USceneComponent* SceneComp = Cast<USceneComponent>(Component))
 	{
 		Json->SetBoolField(TEXT("visible"), SceneComp->IsVisible());

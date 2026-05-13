@@ -50,27 +50,23 @@ public:
 		const TSharedRef<FJsonObject>& Params,
 		const FString& PathParamName = TEXT("blueprint_path"))
 	{
-		// Extract blueprint path
 		if (!Params->TryGetStringField(PathParamName, BlueprintPath) || BlueprintPath.IsEmpty())
 		{
 			LastError = FString::Printf(TEXT("Missing required parameter: %s"), *PathParamName);
 			return FMCPToolResult::Error(LastError);
 		}
 
-		// Validate path (security check)
 		if (!FMCPParamValidator::ValidateBlueprintPath(BlueprintPath, LastError))
 		{
 			return FMCPToolResult::Error(LastError);
 		}
 
-		// Load Blueprint
 		Blueprint = FBlueprintUtils::LoadBlueprint(BlueprintPath, LastError);
 		if (!Blueprint)
 		{
 			return FMCPToolResult::Error(LastError);
 		}
 
-		// Check if editable
 		if (!FBlueprintUtils::IsBlueprintEditable(Blueprint, LastError))
 		{
 			return FMCPToolResult::Error(LastError);
@@ -90,20 +86,17 @@ public:
 		const TSharedRef<FJsonObject>& Params,
 		const FString& PathParamName = TEXT("blueprint_path"))
 	{
-		// Extract blueprint path
 		if (!Params->TryGetStringField(PathParamName, BlueprintPath) || BlueprintPath.IsEmpty())
 		{
 			LastError = FString::Printf(TEXT("Missing required parameter: %s"), *PathParamName);
 			return FMCPToolResult::Error(LastError);
 		}
 
-		// Validate path (security check)
 		if (!FMCPParamValidator::ValidateBlueprintPath(BlueprintPath, LastError))
 		{
 			return FMCPToolResult::Error(LastError);
 		}
 
-		// Load Blueprint
 		Blueprint = FBlueprintUtils::LoadBlueprint(BlueprintPath, LastError);
 		if (!Blueprint)
 		{
@@ -129,7 +122,6 @@ public:
 			return FMCPToolResult::Error(LastError);
 		}
 
-		// Compile with detailed result capture
 		CompileResult = FBlueprintLoader::CompileBlueprintWithResult(Blueprint);
 
 		if (!CompileResult.bSuccess)
@@ -139,7 +131,6 @@ public:
 				TEXT("%s succeeded but compilation failed:\n%s"), *OperationName, *CompileResult.VerboseOutput));
 		}
 
-		// Mark dirty
 		FBlueprintUtils::MarkBlueprintDirty(Blueprint);
 
 		return TOptional<FMCPToolResult>();
@@ -159,14 +150,12 @@ public:
 			ResultData->SetBoolField(TEXT("compiled"), CompileResult.bSuccess);
 			ResultData->SetStringField(TEXT("compile_status"), CompileResult.StatusString);
 
-			// Always include compile info when there are messages (errors OR warnings)
 			if (CompileResult.HasIssues() || !CompileResult.bSuccess)
 			{
 				ResultData->SetNumberField(TEXT("error_count"), CompileResult.ErrorCount);
 				ResultData->SetNumberField(TEXT("warning_count"), CompileResult.WarningCount);
 				ResultData->SetStringField(TEXT("compile_output"), CompileResult.VerboseOutput);
 
-				// Include structured messages array
 				TArray<TSharedPtr<FJsonValue>> MessagesArray;
 				for (const FBlueprintCompileMessage& Msg : CompileResult.Messages)
 				{

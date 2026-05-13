@@ -11,7 +11,6 @@
 
 FMCPToolResult FMCPTool_BlueprintQuery::Execute(const TSharedRef<FJsonObject>& Params)
 {
-	// Get operation type
 	FString Operation;
 	TOptional<FMCPToolResult> Error;
 	if (!ExtractRequiredString(Params, TEXT("operation"), Operation, Error))
@@ -118,7 +117,7 @@ UEdGraphNode* FMCPTool_BlueprintQuery::FindNodeInGraphs(
 	{
 		if (!Graph) continue;
 
-		// Try MCP ID first
+		// Accept either MCP-assigned ID or raw NodeGuid — query responses expose both, callers commonly pass either
 		UEdGraphNode* Node = FBlueprintGraphEditor::FindNodeById(Graph, NodeId);
 		if (Node)
 		{
@@ -126,7 +125,6 @@ UEdGraphNode* FMCPTool_BlueprintQuery::FindNodeInGraphs(
 			return Node;
 		}
 
-		// Fallback: try matching NodeGuid
 		for (UEdGraphNode* N : Graph->Nodes)
 		{
 			if (N && N->NodeGuid.ToString() == NodeId)
@@ -233,7 +231,6 @@ FMCPToolResult FMCPTool_BlueprintQuery::ExecuteGetNodePins(const TSharedRef<FJso
 		return FMCPToolResult::Error(FString::Printf(TEXT("Graph '%s' not found"), *GraphName));
 	}
 
-	// FindNodeInGraphs tries MCP ID first, then NodeGuid fallback
 	FString FoundGraphName;
 	UEdGraphNode* FoundNode = FindNodeInGraphs(SearchGraphs, NodeId, FoundGraphName);
 	if (!FoundNode)
@@ -241,7 +238,6 @@ FMCPToolResult FMCPTool_BlueprintQuery::ExecuteGetNodePins(const TSharedRef<FJso
 		return FMCPToolResult::Error(FString::Printf(TEXT("Node '%s' not found"), *NodeId));
 	}
 
-	// Serialize pins with connection targets
 	TArray<TSharedPtr<FJsonValue>> PinsArray;
 	for (UEdGraphPin* Pin : FoundNode->Pins)
 	{
@@ -257,7 +253,7 @@ FMCPToolResult FMCPTool_BlueprintQuery::ExecuteGetNodePins(const TSharedRef<FJso
 			PinObj->SetStringField(TEXT("default_value"), Pin->DefaultValue);
 		}
 
-		// Connection targets — include both MCP ID and GUID for graph traversal
+		// Emit both MCP ID and GUID per connection so callers can use whichever they have on hand
 		TArray<TSharedPtr<FJsonValue>> Connections;
 		for (UEdGraphPin* LinkedPin : Pin->LinkedTo)
 		{
@@ -366,13 +362,12 @@ FMCPToolResult FMCPTool_BlueprintQuery::ExecuteFindReferences(const TSharedRef<F
 	bool bSearchFunctions = RefType.IsEmpty() || RefType == TEXT("function");
 	int32 Limit = FMath::Clamp(ExtractOptionalNumber<int32>(Params, TEXT("limit"), 100), 1, 1000);
 
-	// Use FName for case-insensitive comparison (FName is case-preserving but compares case-insensitive)
+	// FName comparison is case-insensitive — matches UE convention for blueprint variable/function lookups
 	FName RefFName(*RefName);
 
 	TArray<TSharedPtr<FJsonValue>> References;
 	int32 TotalMatches = 0;
 
-	// Search all graphs including macros
 	TArray<UEdGraph*> AllGraphs = CollectGraphs(Blueprint, FString());
 
 	for (UEdGraph* Graph : AllGraphs)
@@ -384,7 +379,6 @@ FMCPToolResult FMCPTool_BlueprintQuery::ExecuteFindReferences(const TSharedRef<F
 			if (!Node) continue;
 			bool bMatched = false;
 
-			// Check variable references (case-insensitive via FName)
 			if (bSearchVariables)
 			{
 				if (UK2Node_Variable* VarNode = Cast<UK2Node_Variable>(Node))
@@ -396,7 +390,6 @@ FMCPToolResult FMCPTool_BlueprintQuery::ExecuteFindReferences(const TSharedRef<F
 				}
 			}
 
-			// Check function call references (case-insensitive via FName)
 			if (!bMatched && bSearchFunctions)
 			{
 				if (UK2Node_CallFunction* CallNode = Cast<UK2Node_CallFunction>(Node))

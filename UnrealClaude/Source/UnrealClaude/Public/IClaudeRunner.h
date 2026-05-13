@@ -4,7 +4,6 @@
 
 #include "CoreMinimal.h"
 
-// Forward declare delegates for the interface
 DECLARE_DELEGATE_TwoParams(FOnClaudeResponse, const FString& /*Response*/, bool /*bSuccess*/);
 DECLARE_DELEGATE_OneParam(FOnClaudeProgress, const FString& /*PartialOutput*/);
 

@@ -45,7 +45,6 @@ public:
 			return FMCPToolResult::Error(TEXT("Task queue not initialized"));
 		}
 
-		// Extract task ID
 		FString TaskIdString;
 		TOptional<FMCPToolResult> Error;
 		if (!ExtractRequiredString(Params, TEXT("task_id"), TaskIdString, Error))
@@ -53,14 +52,12 @@ public:
 			return Error.GetValue();
 		}
 
-		// Parse GUID
 		FGuid TaskId;
 		if (!FGuid::Parse(TaskIdString, TaskId))
 		{
 			return FMCPToolResult::Error(TEXT("Invalid task_id format"));
 		}
 
-		// Get task
 		TSharedPtr<FMCPAsyncTask> Task = TaskQueue->GetTask(TaskId);
 		if (!Task.IsValid())
 		{
@@ -68,7 +65,6 @@ public:
 				FString::Printf(TEXT("Task not found: %s"), *TaskIdString));
 		}
 
-		// Check if task is complete
 		if (!Task->IsComplete())
 		{
 			EMCPTaskStatus Status = Task->Status.Load();
@@ -77,8 +73,8 @@ public:
 					*FMCPAsyncTask::StatusToString(Status)));
 		}
 
-		// Build response with full result
-		TSharedPtr<FJsonObject> ResultData = Task->ToJson(true); // Include full result
+		// Pass true to include the full Result payload (default ToJson omits it for the poll endpoint)
+		TSharedPtr<FJsonObject> ResultData = Task->ToJson(true);
 
 		FMCPToolResult Result;
 		Result.bSuccess = Task->Result.bSuccess;

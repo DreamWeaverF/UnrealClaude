@@ -56,11 +56,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FClipboardImage_Cleanup_DeletesOldFiles::RunTest(const FString& Parameters)
 {
-	// Create a temp directory for testing
 	FString TestDir = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("UnrealClaude"), TEXT("test_screenshots"));
 	IFileManager::Get().MakeDirectory(*TestDir, true);
 
-	// Create test files
 	FString OldFile = FPaths::Combine(TestDir, TEXT("clipboard_20200101_120000.png"));
 	FString NewFile = FPaths::Combine(TestDir, TEXT("clipboard_99991231_235959.png"));
 
@@ -79,7 +77,6 @@ bool FClipboardImage_Cleanup_DeletesOldFiles::RunTest(const FString& Parameters)
 	TestFalse("Old file should be deleted after cleanup", FPaths::FileExists(OldFile));
 	// New file might or might not exist depending on timing, so we don't assert on it
 
-	// Cleanup test directory
 	IFileManager::Get().DeleteDirectory(*TestDir, false, true);
 
 	return true;
@@ -96,16 +93,13 @@ bool FClipboardImage_Cleanup_IgnoresNonClipboardFiles::RunTest(const FString& Pa
 	FString TestDir = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("UnrealClaude"), TEXT("test_screenshots2"));
 	IFileManager::Get().MakeDirectory(*TestDir, true);
 
-	// Create a non-clipboard file
 	FString OtherFile = FPaths::Combine(TestDir, TEXT("important_data.png"));
 	FFileHelper::SaveStringToFile(TEXT("keep me"), *OtherFile);
 
-	// Cleanup with very short max age
 	FClipboardImageUtils::CleanupOldScreenshots(TestDir, 0.0);
 
 	TestTrue("Non-clipboard file should survive cleanup", FPaths::FileExists(OtherFile));
 
-	// Cleanup
 	IFileManager::Get().DeleteDirectory(*TestDir, false, true);
 
 	return true;
@@ -173,10 +167,8 @@ bool FClipboardImage_RequestConfig_HasAttachedImagePaths::RunTest(const FString&
 {
 	FClaudeRequestConfig Config;
 
-	// Default should be empty array
 	TestEqual("AttachedImagePaths should default to empty array", Config.AttachedImagePaths.Num(), 0);
 
-	// Should be appendable
 	Config.AttachedImagePaths.Add(TEXT("C:/test/image1.png"));
 	Config.AttachedImagePaths.Add(TEXT("C:/test/image2.png"));
 	TestEqual("AttachedImagePaths should have 2 entries", Config.AttachedImagePaths.Num(), 2);
@@ -195,10 +187,8 @@ bool FClipboardImage_PromptOptions_HasAttachedImagePaths::RunTest(const FString&
 {
 	FClaudePromptOptions Options;
 
-	// Default should be empty array
 	TestEqual("AttachedImagePaths should default to empty array", Options.AttachedImagePaths.Num(), 0);
 
-	// Should be appendable
 	Options.AttachedImagePaths.Add(TEXT("C:/test/screenshot.png"));
 	TestEqual("AttachedImagePaths should have 1 entry", Options.AttachedImagePaths.Num(), 1);
 
@@ -388,10 +378,8 @@ bool FClipboardImage_StreamJson_BuildPayloadWithImage::RunTest(const FString& Pa
 	TArray<FString> ImagePaths = { TestImagePath };
 	FString Payload = Runner.BuildStreamJsonPayload(TEXT("Hello world"), ImagePaths);
 
-	// Verify it's valid JSON (single line NDJSON)
 	TestFalse("Payload should not be empty", Payload.IsEmpty());
 
-	// Parse the JSON
 	FString JsonLine = Payload.TrimEnd();
 	TSharedPtr<FJsonObject> Envelope;
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonLine);
@@ -401,12 +389,10 @@ bool FClipboardImage_StreamJson_BuildPayloadWithImage::RunTest(const FString& Pa
 
 	if (bParsed && Envelope.IsValid())
 	{
-		// Check envelope structure
 		FString EnvType;
 		TestTrue("Should have type field", Envelope->TryGetStringField(TEXT("type"), EnvType));
 		TestEqual("Envelope type should be 'user'", EnvType, TEXT("user"));
 
-		// Check message
 		const TSharedPtr<FJsonObject>* MessageObj;
 		TestTrue("Should have message field", Envelope->TryGetObjectField(TEXT("message"), MessageObj));
 		if (MessageObj)
@@ -415,7 +401,6 @@ bool FClipboardImage_StreamJson_BuildPayloadWithImage::RunTest(const FString& Pa
 			(*MessageObj)->TryGetStringField(TEXT("role"), Role);
 			TestEqual("Role should be 'user'", Role, TEXT("user"));
 
-			// Check content array
 			const TArray<TSharedPtr<FJsonValue>>* ContentArray;
 			TestTrue("Should have content array", (*MessageObj)->TryGetArrayField(TEXT("content"), ContentArray));
 			if (ContentArray)
@@ -424,7 +409,6 @@ bool FClipboardImage_StreamJson_BuildPayloadWithImage::RunTest(const FString& Pa
 
 				if (ContentArray->Num() >= 2)
 				{
-					// First block: text
 					const TSharedPtr<FJsonObject>* TextBlock;
 					(*ContentArray)[0]->TryGetObject(TextBlock);
 					if (TextBlock)
@@ -434,7 +418,6 @@ bool FClipboardImage_StreamJson_BuildPayloadWithImage::RunTest(const FString& Pa
 						TestEqual("First block type should be 'text'", BlockType, TEXT("text"));
 					}
 
-					// Second block: image
 					const TSharedPtr<FJsonObject>* ImageBlock;
 					(*ContentArray)[1]->TryGetObject(ImageBlock);
 					if (ImageBlock)
@@ -464,7 +447,6 @@ bool FClipboardImage_StreamJson_BuildPayloadWithImage::RunTest(const FString& Pa
 		}
 	}
 
-	// Cleanup test file
 	IFileManager::Get().Delete(*TestImagePath);
 
 	return true;
@@ -649,7 +631,6 @@ bool FClipboardImage_StreamJson_BuildPayloadRejectsOversizedImage::RunTest(const
 		}
 	}
 
-	// Cleanup
 	IFileManager::Get().Delete(*OversizedPath);
 
 	return true;
@@ -740,7 +721,6 @@ bool FClipboardImage_MultiImage_BuildPayloadWithMultipleImages::RunTest(const FS
 	int32 BlockCount = GetContentBlockCount(Payload);
 	TestEqual("Should have 4 content blocks (1 text + 3 images)", BlockCount, 4);
 
-	// Cleanup
 	IFileManager::Get().Delete(*Img1);
 	IFileManager::Get().Delete(*Img2);
 	IFileManager::Get().Delete(*Img3);
@@ -777,7 +757,6 @@ bool FClipboardImage_MultiImage_BuildPayloadRespectsMaxCount::RunTest(const FStr
 	TestEqual("Should have 6 content blocks (1 text + 5 images, capped)",
 		BlockCount, 1 + UnrealClaudeConstants::ClipboardImage::MaxImagesPerMessage);
 
-	// Cleanup
 	for (const FString& F : CreatedFiles)
 	{
 		IFileManager::Get().Delete(*F);
@@ -809,7 +788,6 @@ bool FClipboardImage_MultiImage_BuildPayloadSkipsInvalidImages::RunTest(const FS
 	int32 BlockCount = GetContentBlockCount(Payload);
 	TestEqual("Should have 3 content blocks (1 text + 2 valid images)", BlockCount, 3);
 
-	// Cleanup
 	IFileManager::Get().Delete(*ValidImg1);
 	IFileManager::Get().Delete(*ValidImg2);
 
@@ -857,7 +835,6 @@ bool FClipboardImage_MultiImage_BuildPayloadTotalSizeGuard::RunTest(const FStrin
 	TestTrue("Should have included some images but not an absurd number",
 		BlockCount >= 2 && BlockCount <= 6);
 
-	// Cleanup
 	for (const FString& F : CreatedFiles)
 	{
 		IFileManager::Get().Delete(*F);
@@ -890,7 +867,6 @@ bool FClipboardImage_MultiImage_BuildPayloadMixedValidation::RunTest(const FStri
 	int32 BlockCount = GetContentBlockCount(Payload);
 	TestEqual("Should have 3 content blocks (1 text + 2 valid images)", BlockCount, 3);
 
-	// Cleanup
 	IFileManager::Get().Delete(*ValidImg1);
 	IFileManager::Get().Delete(*ValidImg2);
 
@@ -937,19 +913,16 @@ bool FClipboardImage_MultiImage_RequestConfigArrayOperations::RunTest(const FStr
 {
 	FClaudeRequestConfig Config;
 
-	// Add paths
 	Config.AttachedImagePaths.Add(TEXT("path1.png"));
 	Config.AttachedImagePaths.Add(TEXT("path2.png"));
 	Config.AttachedImagePaths.Add(TEXT("path3.png"));
 	TestEqual("Should have 3 paths after Add", Config.AttachedImagePaths.Num(), 3);
 
-	// RemoveAt
 	Config.AttachedImagePaths.RemoveAt(1);
 	TestEqual("Should have 2 paths after RemoveAt(1)", Config.AttachedImagePaths.Num(), 2);
 	TestEqual("First path should be unchanged", Config.AttachedImagePaths[0], TEXT("path1.png"));
 	TestEqual("Second path should now be the former third", Config.AttachedImagePaths[1], TEXT("path3.png"));
 
-	// Empty
 	Config.AttachedImagePaths.Empty();
 	TestEqual("Should have 0 paths after Empty", Config.AttachedImagePaths.Num(), 0);
 
@@ -969,7 +942,6 @@ bool FClipboardImage_MultiImage_PromptOptionsArrayCopied::RunTest(const FString&
 	Original.AttachedImagePaths.Add(TEXT("img2.png"));
 	Original.AttachedImagePaths.Add(TEXT("img3.png"));
 
-	// Copy
 	FClaudePromptOptions Copy = Original;
 	TestEqual("Copied options should have 3 paths", Copy.AttachedImagePaths.Num(), 3);
 	TestEqual("First path should match", Copy.AttachedImagePaths[0], TEXT("img1.png"));

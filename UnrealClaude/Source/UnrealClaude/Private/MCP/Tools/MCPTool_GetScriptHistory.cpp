@@ -7,7 +7,6 @@
 
 FMCPToolResult FMCPTool_GetScriptHistory::Execute(const TSharedRef<FJsonObject>& Params)
 {
-	// Get count parameter
 	int32 Count = 10;
 	double CountDouble;
 	if (Params->TryGetNumberField(TEXT("count"), CountDouble))
@@ -15,10 +14,8 @@ FMCPToolResult FMCPTool_GetScriptHistory::Execute(const TSharedRef<FJsonObject>&
 		Count = FMath::Clamp(static_cast<int32>(CountDouble), 1, 50);
 	}
 
-	// Get recent scripts
 	TArray<FScriptHistoryEntry> RecentScripts = FScriptExecutionManager::Get().GetRecentScripts(Count);
 
-	// Build result array
 	TArray<TSharedPtr<FJsonValue>> ScriptsArray;
 	for (const FScriptHistoryEntry& Entry : RecentScripts)
 	{
@@ -37,7 +34,6 @@ FMCPToolResult FMCPTool_GetScriptHistory::Execute(const TSharedRef<FJsonObject>&
 	ResultData->SetArrayField(TEXT("scripts"), ScriptsArray);
 	ResultData->SetNumberField(TEXT("count"), RecentScripts.Num());
 
-	// Also include formatted context string
 	FString FormattedContext = FScriptExecutionManager::Get().FormatHistoryForContext(Count);
 	ResultData->SetStringField(TEXT("formatted_context"), FormattedContext);
 

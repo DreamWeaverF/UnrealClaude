@@ -6,7 +6,6 @@
 #include "Animation/AnimBlueprint.h"
 #include "Dom/JsonObject.h"
 
-// Forward declarations
 class UAnimSequence;
 class UBlendSpace;
 class UBlendSpace1D;
@@ -159,11 +158,9 @@ public:
 	static TSharedPtr<FJsonObject> SerializeBlendSpaceInfo(UBlendSpace* BlendSpace);
 
 private:
-	// Asset path resolution
 	static FString ResolveAnimAssetPath(const FString& AssetPath);
 	static TArray<FString> GetCommonSearchPaths();
 
-	// Graph modification helpers
 	static bool ClearAndSetupStateGraph(UEdGraph* StateGraph, FString& OutError);
 
 	/**
@@ -183,7 +180,6 @@ private:
 
 		if (!Asset)
 		{
-			// Try common search paths
 			for (const FString& SearchPath : GetCommonSearchPaths())
 			{
 				FString FullPath = SearchPath / AssetPath;

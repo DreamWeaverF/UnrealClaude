@@ -29,20 +29,17 @@ public:
 	virtual FMCPToolResult Execute(const TSharedRef<FJsonObject>& Params) override;
 
 private:
-	// Operation handlers
 	FMCPToolResult ExecuteCreateMaterialInstance(const TSharedRef<FJsonObject>& Params);
 	FMCPToolResult ExecuteSetMaterialParameters(const TSharedRef<FJsonObject>& Params);
 	FMCPToolResult ExecuteSetSkeletalMeshMaterial(const TSharedRef<FJsonObject>& Params);
 	FMCPToolResult ExecuteSetActorMaterial(const TSharedRef<FJsonObject>& Params);
 	FMCPToolResult ExecuteGetMaterialInfo(const TSharedRef<FJsonObject>& Params);
 
-	// Helper methods
 	bool SetScalarParameter(class UMaterialInstanceConstant* MatInst, const FString& ParamName, float Value, FString& OutError);
 	bool SetVectorParameter(class UMaterialInstanceConstant* MatInst, const FString& ParamName, const FLinearColor& Value, FString& OutError);
 	bool SetTextureParameter(class UMaterialInstanceConstant* MatInst, const FString& ParamName, const FString& TexturePath, FString& OutError);
 	bool ApplyParametersFromJson(class UMaterialInstanceConstant* MatInst, const TSharedPtr<FJsonObject>& ParamsObj, FString& OutError);
 
-	// Utility
 	TSharedPtr<FJsonObject> BuildMaterialInfoJson(class UMaterialInterface* Material);
 	TArray<TSharedPtr<FJsonValue>> GetMaterialParameters(class UMaterialInterface* Material);
 };

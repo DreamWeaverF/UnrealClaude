@@ -43,19 +43,16 @@ void FProjectContextManager::RefreshContext()
 
 	UE_LOG(LogUnrealClaude, Log, TEXT("Refreshing project context..."));
 
-	// Basic project info
 	CachedContext.ProjectName = FApp::GetProjectName();
 	CachedContext.ProjectPath = FPaths::ProjectDir();
 	CachedContext.SourcePath = FPaths::Combine(FPaths::ProjectDir(), TEXT("Source"));
 	CachedContext.EngineVersion = FEngineVersion::Current().ToString();
 	CachedContext.GatheredAt = FDateTime::Now();
 
-	// Clear previous data
 	CachedContext.SourceFiles.Empty();
 	CachedContext.UClasses.Empty();
 	CachedContext.LevelActors.Empty();
 
-	// Gather all context
 	ScanSourceFiles();
 	ParseUClasses();
 	GatherLevelActors();
@@ -80,7 +77,6 @@ void FProjectContextManager::ScanSourceFiles()
 		return;
 	}
 
-	// Find all .h and .cpp files
 	TArray<FString> FoundFiles;
 
 	IFileManager::Get().FindFilesRecursive(
@@ -101,7 +97,6 @@ void FProjectContextManager::ScanSourceFiles()
 		false
 	);
 
-	// Convert to relative paths
 	for (const FString& FilePath : FoundFiles)
 	{
 		FString RelativePath = FilePath;
@@ -133,7 +128,6 @@ FString FProjectContextManager::ParseIdentifier(const FString& Content, int32 St
 
 bool FProjectContextManager::ParseSingleUClass(const FString& FileContent, const FString& RelativePath, int32 UClassPos, int32& OutNextSearchPos)
 {
-	// Find the class keyword after UCLASS(...)
 	int32 ClassPos = FileContent.Find(TEXT("class "), ESearchCase::CaseSensitive, ESearchDir::FromStart, UClassPos);
 	if (ClassPos == INDEX_NONE || ClassPos > UClassPos + UnrealClaudeConstants::Context::MaxUClassToClassKeywordDistance)
 	{
@@ -141,17 +135,15 @@ bool FProjectContextManager::ParseSingleUClass(const FString& FileContent, const
 		return false;
 	}
 
-	// Parse first identifier after "class " (might be API macro)
+	// First identifier after "class " may be an API macro (e.g. MYGAME_API), so we capture two
 	int32 NameStart = ClassPos + 6;
 	int32 NameEnd;
 	FString FirstIdent = ParseIdentifier(FileContent, NameStart, NameEnd);
 
-	// Skip whitespace and get next identifier
 	NameStart = SkipWhitespace(FileContent, NameEnd);
 	int32 SecondEnd;
 	FString SecondIdent = ParseIdentifier(FileContent, NameStart, SecondEnd);
 
-	// Determine actual class name (handle API macro suffix)
 	FString ClassName;
 	int32 ClassNameEnd;
 	if (FirstIdent.EndsWith(TEXT("_API")) && !SecondIdent.IsEmpty())
@@ -165,7 +157,6 @@ bool FProjectContextManager::ParseSingleUClass(const FString& FileContent, const
 		ClassNameEnd = SecondIdent.IsEmpty() ? NameEnd : SecondEnd;
 	}
 
-	// Find parent class (after ": public ")
 	FString ParentClass;
 	int32 InheritPos = FileContent.Find(TEXT(": public "), ESearchCase::IgnoreCase, ESearchDir::FromStart, ClassNameEnd);
 	if (InheritPos != INDEX_NONE && InheritPos < ClassNameEnd + UnrealClaudeConstants::Context::MaxClassNameToInheritanceDistance)
@@ -176,7 +167,6 @@ bool FProjectContextManager::ParseSingleUClass(const FString& FileContent, const
 
 	OutNextSearchPos = ClassPos + 6;
 
-	// Validate and store result
 	if (ClassName.IsEmpty() || ClassName.Len() <= 1)
 	{
 		return false;
@@ -195,7 +185,6 @@ bool FProjectContextManager::ParseSingleUClass(const FString& FileContent, const
 
 void FProjectContextManager::ParseUClasses()
 {
-	// Scan header files for UCLASS declarations
 	for (const FString& RelativePath : CachedContext.SourceFiles)
 	{
 		if (!RelativePath.EndsWith(TEXT(".h")))
@@ -210,7 +199,6 @@ void FProjectContextManager::ParseUClasses()
 			continue;
 		}
 
-		// Find all UCLASS declarations in this file
 		int32 SearchStart = 0;
 		while (true)
 		{
@@ -248,7 +236,6 @@ void FProjectContextManager::GatherLevelActors()
 			continue;
 		}
 
-		// Skip hidden/transient actors
 		if (Actor->HasAnyFlags(RF_Transient))
 		{
 			continue;
@@ -269,13 +256,11 @@ void FProjectContextManager::CountAssets()
 	FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
 	IAssetRegistry& AssetRegistry = AssetRegistryModule.Get();
 
-	// Get all assets in the game content directory
 	TArray<FAssetData> AssetDataList;
 	AssetRegistry.GetAssetsByPath(FName(TEXT("/Game")), AssetDataList, true);
 
 	CachedContext.AssetCount = AssetDataList.Num();
 
-	// Count blueprints
 	CachedContext.BlueprintCount = 0;
 	for (const FAssetData& AssetData : AssetDataList)
 	{
@@ -300,19 +285,17 @@ FString FProjectContextManager::FormatContextForPrompt() const
 
 	Context += TEXT("\n\n=== PROJECT CONTEXT ===\n\n");
 
-	// Project info
 	Context += FString::Printf(TEXT("Project: %s\n"), *CachedContext.ProjectName);
 	Context += FString::Printf(TEXT("Engine: %s\n"), *CachedContext.EngineVersion);
 	Context += FString::Printf(TEXT("Level: %s\n\n"), *CachedContext.CurrentLevelName);
 
-	// Statistics
 	Context += FString::Printf(TEXT("Source Files: %d\n"), CachedContext.SourceFiles.Num());
 	Context += FString::Printf(TEXT("C++ Classes: %d\n"), CachedContext.CppClassCount);
 	Context += FString::Printf(TEXT("Blueprints: %d\n"), CachedContext.BlueprintCount);
 	Context += FString::Printf(TEXT("Total Assets: %d\n"), CachedContext.AssetCount);
 	Context += FString::Printf(TEXT("Level Actors: %d\n\n"), CachedContext.LevelActors.Num());
 
-	// List UCLASS types (limit to avoid prompt bloat)
+	// Cap UCLASS list at MaxClassesToFormat to keep the prompt size bounded
 	if (CachedContext.UClasses.Num() > 0)
 	{
 		Context += TEXT("Project C++ Classes:\n");
@@ -336,12 +319,10 @@ FString FProjectContextManager::FormatContextForPrompt() const
 		Context += TEXT("\n");
 	}
 
-	// List source files (abbreviated)
 	if (CachedContext.SourceFiles.Num() > 0)
 	{
 		Context += TEXT("Source Structure:\n");
 
-		// Group by directory
 		TMap<FString, TArray<FString>> FilesByDir;
 		for (const FString& FilePath : CachedContext.SourceFiles)
 		{
@@ -362,7 +343,6 @@ FString FProjectContextManager::FormatContextForPrompt() const
 		Context += TEXT("\n");
 	}
 
-	// List level actors (grouped by class, limited)
 	if (CachedContext.LevelActors.Num() > 0)
 	{
 		Context += TEXT("Level Actors (by type):\n");
@@ -373,7 +353,7 @@ FString FProjectContextManager::FormatContextForPrompt() const
 			ActorsByClass.FindOrAdd(ActorInfo.ClassName)++;
 		}
 
-		// Sort by count (descending)
+		// Sort by count descending so the most populous classes appear first
 		TArray<TPair<FString, int32>> SortedActors;
 		for (const auto& Pair : ActorsByClass)
 		{
@@ -386,7 +366,7 @@ FString FProjectContextManager::FormatContextForPrompt() const
 		int32 Shown = 0;
 		for (const auto& Pair : SortedActors)
 		{
-			if (Shown++ >= 15) // Limit types shown
+			if (Shown++ >= 15)
 			{
 				Context += FString::Printf(TEXT("  ... and %d more types\n"), SortedActors.Num() - 15);
 				break;

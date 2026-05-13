@@ -29,7 +29,6 @@ bool FMCPTaskQueue_Create::RunTest(const FString& Parameters)
 
 	TestTrue("Task queue should be created", Queue.IsValid());
 
-	// Check default config values
 	TestEqual("Default max concurrent tasks should be 4", Queue->Config.MaxConcurrentTasks, 4);
 	TestEqual("Default max history size should be 100", Queue->Config.MaxHistorySize, 100);
 	TestEqual("Default timeout should be 120000ms", Queue->Config.DefaultTimeoutMs, 120000u);
@@ -139,7 +138,6 @@ bool FMCPTaskQueue_SubmitValidTool::RunTest(const FString& Parameters)
 
 	TestTrue("Should return valid task ID", TaskId.IsValid());
 
-	// Check task was added
 	TSharedPtr<FMCPAsyncTask> Task = Queue->GetTask(TaskId);
 	TestNotNull("Task should be retrievable", Task.Get());
 	TestEqual("Tool name should match", Task->ToolName, TEXT("get_level_actors"));
@@ -221,7 +219,6 @@ bool FMCPTaskQueue_GetTaskStatus::RunTest(const FString& Parameters)
 	TestTrue("Initial status should be pending or running",
 		Status == EMCPTaskStatus::Pending || Status == EMCPTaskStatus::Running);
 
-	// Submitted time should be set
 	TestTrue("SubmittedTime should be set", Task->SubmittedTime > FDateTime::MinValue());
 
 	Registry.StopTaskQueue();
@@ -276,7 +273,6 @@ bool FMCPTaskQueue_CancelPendingTask::RunTest(const FString& Parameters)
 	bool bCancelled = Queue->CancelTask(TaskId);
 	TestTrue("Should be able to cancel pending task", bCancelled);
 
-	// Check status changed
 	TestTrue("Status should be cancelled", Task->Status.Load() == EMCPTaskStatus::Cancelled);
 	TestTrue("Task should be complete", Task->IsComplete());
 
@@ -342,12 +338,10 @@ bool FMCPTaskQueue_GetAllTasks::RunTest(const FString& Parameters)
 	FMCPToolRegistry Registry;
 	TSharedPtr<FMCPTaskQueue> Queue = Registry.GetTaskQueue();
 
-	// Submit multiple tasks
 	TSharedPtr<FJsonObject> Params = MakeShared<FJsonObject>();
 	Queue->SubmitTask(TEXT("get_level_actors"), Params);
 	Queue->SubmitTask(TEXT("get_output_log"), Params);
 
-	// Get all tasks
 	TArray<TSharedPtr<FMCPAsyncTask>> Tasks = Queue->GetAllTasks(true);
 
 	TestTrue("Should have at least 2 tasks", Tasks.Num() >= 2);
@@ -378,7 +372,6 @@ bool FMCPTaskQueue_GetStats::RunTest(const FString& Parameters)
 	Queue->SubmitTask(TEXT("get_level_actors"), Params);
 	Queue->SubmitTask(TEXT("get_output_log"), Params);
 
-	// Get stats
 	int32 Pending, Running, Completed;
 	Queue->GetStats(Pending, Running, Completed);
 
@@ -510,7 +503,6 @@ bool FMCPTaskQueue_ConfigOverride::RunTest(const FString& Parameters)
 	FMCPToolRegistry Registry;
 	TSharedPtr<FMCPTaskQueue> Queue = Registry.GetTaskQueue();
 
-	// Override config
 	Queue->Config.MaxConcurrentTasks = 2;
 	Queue->Config.MaxHistorySize = 10;
 	Queue->Config.DefaultTimeoutMs = 5000;

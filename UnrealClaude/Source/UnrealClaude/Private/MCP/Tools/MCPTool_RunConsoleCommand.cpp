@@ -9,14 +9,12 @@
 
 FMCPToolResult FMCPTool_RunConsoleCommand::Execute(const TSharedRef<FJsonObject>& Params)
 {
-	// Validate editor context using base class
 	UWorld* World = nullptr;
 	if (auto Error = ValidateEditorContext(World))
 	{
 		return Error.GetValue();
 	}
 
-	// Extract and validate command using base class helpers
 	FString Command;
 	TOptional<FMCPToolResult> ParamError;
 	if (!ExtractRequiredString(Params, TEXT("command"), Command, ParamError))
@@ -30,13 +28,10 @@ FMCPToolResult FMCPTool_RunConsoleCommand::Execute(const TSharedRef<FJsonObject>
 
 	UE_LOG(LogUnrealClaude, Log, TEXT("Executing console command: %s"), *Command);
 
-	// Create output capture device
 	FUnrealClaudeOutputDevice OutputDevice;
 
-	// Execute the command
 	GEditor->Exec(World, *Command, OutputDevice);
 
-	// Build result
 	TSharedPtr<FJsonObject> ResultData = MakeShared<FJsonObject>();
 	ResultData->SetStringField(TEXT("command"), Command);
 	ResultData->SetStringField(TEXT("output"), OutputDevice.GetTrimmedOutput());

@@ -211,10 +211,9 @@ public:
 	static FString GetNodeId(UEdGraphNode* Node);
 
 private:
-	// Thread-safe counter for unique IDs
+	// Thread-safe counter for unique IDs across concurrent MCP tool calls
 	static volatile int32 NodeIdCounter;
 
-	// Node creation helpers
 	static UEdGraphNode* CreateCallFunctionNode(UEdGraph* Graph, const FString& FunctionName, const FString& TargetClass, int32 PosX, int32 PosY, FString& OutError);
 	static UEdGraphNode* CreateBranchNode(UEdGraph* Graph, int32 PosX, int32 PosY, FString& OutError);
 	static UEdGraphNode* CreateEventNode(UEdGraph* Graph, const FString& EventName, int32 PosX, int32 PosY, FString& OutError);
@@ -223,6 +222,5 @@ private:
 	static UEdGraphNode* CreateSequenceNode(UEdGraph* Graph, int32 NumOutputs, int32 PosX, int32 PosY, FString& OutError);
 	static UEdGraphNode* CreateMathNode(UEdGraph* Graph, const FString& MathOp, int32 PosX, int32 PosY, FString& OutError);
 
-	// ID prefix for node comments
 	static const FString NodeIdPrefix;
 };

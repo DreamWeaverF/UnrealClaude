@@ -20,31 +20,25 @@ FMCPToolInfo FMCPTool_Asset::GetInfo() const
 	Info.Name = TEXT("asset");
 	Info.Description = TEXT("Generic asset operations: set properties, save, and query assets in Content Browser");
 
-	// Parameters
 	Info.Parameters.Add(FMCPToolParameter(TEXT("operation"), TEXT("string"),
 		TEXT("Operation: set_asset_property, save_asset, get_asset_info, list_assets"), true));
 
-	// Common params
 	Info.Parameters.Add(FMCPToolParameter(TEXT("asset_path"), TEXT("string"),
 		TEXT("Asset path (e.g., /Game/Characters/MyMesh)"), false));
 
-	// set_asset_property params
 	Info.Parameters.Add(FMCPToolParameter(TEXT("property"), TEXT("string"),
 		TEXT("Property path (e.g., Materials.0.MaterialInterface, bEnableGravity)"), false));
 	Info.Parameters.Add(FMCPToolParameter(TEXT("value"), TEXT("any"),
 		TEXT("Value to set (type must match property type)"), false));
 
-	// save_asset params
 	Info.Parameters.Add(FMCPToolParameter(TEXT("save"), TEXT("boolean"),
 		TEXT("Actually save to disk (default: true)"), false));
 	Info.Parameters.Add(FMCPToolParameter(TEXT("mark_dirty"), TEXT("boolean"),
 		TEXT("Mark the asset as dirty (default: true if save is false)"), false));
 
-	// get_asset_info params
 	Info.Parameters.Add(FMCPToolParameter(TEXT("include_properties"), TEXT("boolean"),
 		TEXT("Include editable property list (default: false)"), false));
 
-	// list_assets params
 	Info.Parameters.Add(FMCPToolParameter(TEXT("directory"), TEXT("string"),
 		TEXT("Directory to list (e.g., /Game/Characters/)"), false));
 	Info.Parameters.Add(FMCPToolParameter(TEXT("class_filter"), TEXT("string"),
@@ -121,7 +115,6 @@ FMCPToolResult FMCPTool_Asset::ExecuteSetAssetProperty(const TSharedRef<FJsonObj
 	}
 	TSharedPtr<FJsonValue> Value = Params->TryGetField(TEXT("value"));
 
-	// Load the asset
 	FString LoadError;
 	UObject* Asset = LoadAssetByPath(AssetPath, LoadError);
 	if (!Asset)
@@ -129,18 +122,15 @@ FMCPToolResult FMCPTool_Asset::ExecuteSetAssetProperty(const TSharedRef<FJsonObj
 		return FMCPToolResult::Error(LoadError);
 	}
 
-	// Set the property
 	FString PropertyError;
 	if (!SetPropertyFromJson(Asset, PropertyPath, Value, PropertyError))
 	{
 		return FMCPToolResult::Error(PropertyError);
 	}
 
-	// Mark dirty and notify
 	Asset->PostEditChange();
 	Asset->MarkPackageDirty();
 
-	// Build result
 	TSharedPtr<FJsonObject> ResultData = MakeShared<FJsonObject>();
 	ResultData->SetStringField(TEXT("asset_path"), AssetPath);
 	ResultData->SetStringField(TEXT("property"), PropertyPath);
@@ -166,20 +156,19 @@ FMCPToolResult FMCPTool_Asset::ExecuteSaveAsset(const TSharedRef<FJsonObject>& P
 		return Error.GetValue();
 	}
 
-	// Get options
 	bool bSave = true;
 	if (Params->HasField(TEXT("save")))
 	{
 		bSave = Params->GetBoolField(TEXT("save"));
 	}
 
+	// When not saving, default to marking dirty so the editor flags it for the user's next manual save
 	bool bMarkDirty = !bSave; // Default to marking dirty if not saving
 	if (Params->HasField(TEXT("mark_dirty")))
 	{
 		bMarkDirty = Params->GetBoolField(TEXT("mark_dirty"));
 	}
 
-	// Load the asset
 	FString LoadError;
 	UObject* Asset = LoadAssetByPath(AssetPath, LoadError);
 	if (!Asset)
@@ -190,14 +179,12 @@ FMCPToolResult FMCPTool_Asset::ExecuteSaveAsset(const TSharedRef<FJsonObject>& P
 	bool bWasSaved = false;
 	bool bWasMarkedDirty = false;
 
-	// Mark dirty if requested
 	if (bMarkDirty)
 	{
 		Asset->MarkPackageDirty();
 		bWasMarkedDirty = true;
 	}
 
-	// Save if requested
 	if (bSave)
 	{
 		UPackage* Package = Asset->GetOutermost();
@@ -217,7 +204,6 @@ FMCPToolResult FMCPTool_Asset::ExecuteSaveAsset(const TSharedRef<FJsonObject>& P
 		}
 	}
 
-	// Build result
 	TSharedPtr<FJsonObject> ResultData = MakeShared<FJsonObject>();
 	ResultData->SetStringField(TEXT("asset_path"), AssetPath);
 	ResultData->SetBoolField(TEXT("saved"), bWasSaved);
@@ -250,7 +236,6 @@ FMCPToolResult FMCPTool_Asset::ExecuteGetAssetInfo(const TSharedRef<FJsonObject>
 		bIncludeProperties = Params->GetBoolField(TEXT("include_properties"));
 	}
 
-	// Load the asset
 	FString LoadError;
 	UObject* Asset = LoadAssetByPath(AssetPath, LoadError);
 	if (!Asset)
@@ -260,7 +245,6 @@ FMCPToolResult FMCPTool_Asset::ExecuteGetAssetInfo(const TSharedRef<FJsonObject>
 
 	TSharedPtr<FJsonObject> ResultData = BuildAssetInfoJson(Asset);
 
-	// Add properties if requested
 	if (bIncludeProperties)
 	{
 		ResultData->SetArrayField(TEXT("properties"), GetAssetProperties(Asset, true));
@@ -304,13 +288,11 @@ FMCPToolResult FMCPTool_Asset::ExecuteListAssets(const TSharedRef<FJsonObject>& 
 		Limit = FMath::Clamp(Params->GetIntegerField(TEXT("limit")), 1, 1000);
 	}
 
-	// Query asset registry
 	IAssetRegistry& AssetRegistry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry")).Get();
 
 	TArray<FAssetData> Assets;
 	AssetRegistry.GetAssetsByPath(FName(*Directory), Assets, bRecursive);
 
-	// Filter and build results
 	TArray<TSharedPtr<FJsonValue>> ResultArray;
 	int32 Count = 0;
 
@@ -321,7 +303,6 @@ FMCPToolResult FMCPTool_Asset::ExecuteListAssets(const TSharedRef<FJsonObject>& 
 			break;
 		}
 
-		// Apply class filter if specified
 		if (!ClassFilter.IsEmpty())
 		{
 			FString AssetClassName = AssetData.AssetClassPath.GetAssetName().ToString();
@@ -358,7 +339,7 @@ UObject* FMCPTool_Asset::LoadAssetByPath(const FString& AssetPath, FString& OutE
 	UObject* Asset = LoadObject<UObject>(nullptr, *AssetPath);
 	if (!Asset)
 	{
-		// Try with _C suffix for Blueprint classes
+		// Blueprint generated classes need a _C suffix to resolve via LoadObject
 		if (!AssetPath.EndsWith(TEXT("_C")))
 		{
 			Asset = LoadObject<UObject>(nullptr, *(AssetPath + TEXT("_C")));
@@ -388,15 +369,13 @@ bool FMCPTool_Asset::NavigateToProperty(
 		const FString& PartName = PathParts[i];
 		const bool bIsLastPart = (i == PathParts.Num() - 1);
 
-		// Check for array index notation (e.g., "Materials.0")
+		// A numeric path part means index into the prior array property (e.g., "Materials.0")
 		int32 ArrayIndex = INDEX_NONE;
 		FString PropertyName = PartName;
 
-		// Check if this part is a numeric index
 		if (PartName.IsNumeric())
 		{
 			ArrayIndex = FCString::Atoi(*PartName);
-			// The previous property should be an array
 			if (!OutProperty)
 			{
 				OutError = FString::Printf(TEXT("Cannot index without preceding array property"));
@@ -410,7 +389,6 @@ bool FMCPTool_Asset::NavigateToProperty(
 				return false;
 			}
 
-			// Navigate into array element
 			FScriptArrayHelper ArrayHelper(ArrayProp, ArrayProp->ContainerPtrToValuePtr<void>(OutObject));
 			if (ArrayIndex < 0 || ArrayIndex >= ArrayHelper.Num())
 			{
@@ -418,7 +396,6 @@ bool FMCPTool_Asset::NavigateToProperty(
 				return false;
 			}
 
-			// Get the inner property
 			FProperty* InnerProp = ArrayProp->Inner;
 			if (FObjectProperty* ObjProp = CastField<FObjectProperty>(InnerProp))
 			{
@@ -434,14 +411,12 @@ bool FMCPTool_Asset::NavigateToProperty(
 
 			if (bIsLastPart)
 			{
-				// Return the inner property for setting
 				OutProperty = InnerProp;
 				return true;
 			}
 			continue;
 		}
 
-		// Find the property
 		OutProperty = OutObject->GetClass()->FindPropertyByName(FName(*PropertyName));
 
 		if (!OutProperty)
@@ -450,12 +425,11 @@ bool FMCPTool_Asset::NavigateToProperty(
 			return false;
 		}
 
-		// If not the last part, navigate into nested object
 		if (!bIsLastPart)
 		{
 			if (FArrayProperty* ArrayProp = CastField<FArrayProperty>(OutProperty))
 			{
-				// Keep the array property for next iteration (index access)
+				// Keep the array property; the next path part is expected to be a numeric index
 				continue;
 			}
 
@@ -472,8 +446,7 @@ bool FMCPTool_Asset::NavigateToProperty(
 			}
 			else if (FStructProperty* StructProp = CastField<FStructProperty>(OutProperty))
 			{
-				// For structs, we need to handle differently - keep the struct property
-				// This is a limitation: we can only set entire structs, not nested struct members
+				// Limitation: only whole-struct assignment is supported; cannot descend into struct members
 				OutError = FString::Printf(TEXT("Cannot navigate into struct property: %s. Set the entire struct instead."), *PropertyName);
 				return false;
 			}
@@ -496,7 +469,6 @@ bool FMCPTool_Asset::SetPropertyFromJson(UObject* Object, const FString& Propert
 		return false;
 	}
 
-	// Parse property path
 	TArray<FString> PathParts;
 	PropertyPath.ParseIntoArray(PathParts, TEXT("."), true);
 
@@ -512,16 +484,13 @@ bool FMCPTool_Asset::SetPropertyFromJson(UObject* Object, const FString& Propert
 		return false;
 	}
 
-	// Get property address
 	void* ValuePtr = Property->ContainerPtrToValuePtr<void>(TargetObject);
 
-	// Handle object property (for setting references like materials)
 	if (FObjectProperty* ObjProp = CastField<FObjectProperty>(Property))
 	{
 		return SetObjectPropertyValue(ObjProp, ValuePtr, Value, OutError);
 	}
 
-	// Try numeric property
 	if (FNumericProperty* NumProp = CastField<FNumericProperty>(Property))
 	{
 		if (SetNumericPropertyValue(NumProp, ValuePtr, Value))
@@ -529,7 +498,6 @@ bool FMCPTool_Asset::SetPropertyFromJson(UObject* Object, const FString& Propert
 			return true;
 		}
 	}
-	// Try bool property
 	else if (FBoolProperty* BoolProp = CastField<FBoolProperty>(Property))
 	{
 		bool BoolVal = false;
@@ -539,7 +507,6 @@ bool FMCPTool_Asset::SetPropertyFromJson(UObject* Object, const FString& Propert
 			return true;
 		}
 	}
-	// Try string property
 	else if (FStrProperty* StrProp = CastField<FStrProperty>(Property))
 	{
 		FString StrVal;
@@ -549,7 +516,6 @@ bool FMCPTool_Asset::SetPropertyFromJson(UObject* Object, const FString& Propert
 			return true;
 		}
 	}
-	// Try name property
 	else if (FNameProperty* NameProp = CastField<FNameProperty>(Property))
 	{
 		FString StrVal;
@@ -559,7 +525,6 @@ bool FMCPTool_Asset::SetPropertyFromJson(UObject* Object, const FString& Propert
 			return true;
 		}
 	}
-	// Try struct property
 	else if (FStructProperty* StructProp = CastField<FStructProperty>(Property))
 	{
 		if (SetStructPropertyValue(StructProp, ValuePtr, Value))
@@ -639,7 +604,6 @@ bool FMCPTool_Asset::SetStructPropertyValue(FStructProperty* StructProp, void* V
 
 bool FMCPTool_Asset::SetObjectPropertyValue(FObjectProperty* ObjProp, void* ValuePtr, const TSharedPtr<FJsonValue>& Value, FString& OutError)
 {
-	// Value should be a string path to the object
 	FString ObjectPath;
 	if (!Value->TryGetString(ObjectPath))
 	{
@@ -647,14 +611,13 @@ bool FMCPTool_Asset::SetObjectPropertyValue(FObjectProperty* ObjProp, void* Valu
 		return false;
 	}
 
-	// Handle "None" or empty as null
+	// Empty or "None" clears the reference
 	if (ObjectPath.IsEmpty() || ObjectPath.Equals(TEXT("None"), ESearchCase::IgnoreCase))
 	{
 		ObjProp->SetObjectPropertyValue(ValuePtr, nullptr);
 		return true;
 	}
 
-	// Load the referenced object
 	UObject* ReferencedObject = LoadObject<UObject>(nullptr, *ObjectPath);
 	if (!ReferencedObject)
 	{
@@ -662,7 +625,6 @@ bool FMCPTool_Asset::SetObjectPropertyValue(FObjectProperty* ObjProp, void* Valu
 		return false;
 	}
 
-	// Verify type compatibility
 	if (!ReferencedObject->IsA(ObjProp->PropertyClass))
 	{
 		OutError = FString::Printf(TEXT("Object type mismatch. Expected %s, got %s"),
@@ -683,11 +645,9 @@ TSharedPtr<FJsonObject> FMCPTool_Asset::BuildAssetInfoJson(UObject* Asset)
 	Info->SetStringField(TEXT("class"), Asset->GetClass()->GetName());
 	Info->SetStringField(TEXT("package"), Asset->GetOutermost()->GetName());
 
-	// Check dirty state
 	UPackage* Package = Asset->GetOutermost();
 	Info->SetBoolField(TEXT("is_dirty"), Package->IsDirty());
 
-	// Add class-specific info
 	if (USkeletalMesh* SkelMesh = Cast<USkeletalMesh>(Asset))
 	{
 		TArray<TSharedPtr<FJsonValue>> MaterialsArr;
@@ -715,7 +675,6 @@ TArray<TSharedPtr<FJsonValue>> FMCPTool_Asset::GetAssetProperties(UObject* Asset
 	{
 		FProperty* Property = *PropIt;
 
-		// Skip non-editable if requested
 		if (bEditableOnly && !Property->HasAnyPropertyFlags(CPF_Edit))
 		{
 			continue;
@@ -724,7 +683,6 @@ TArray<TSharedPtr<FJsonValue>> FMCPTool_Asset::GetAssetProperties(UObject* Asset
 		TSharedPtr<FJsonObject> PropObj = MakeShared<FJsonObject>();
 		PropObj->SetStringField(TEXT("name"), Property->GetName());
 
-		// Determine type string
 		FString TypeStr;
 		if (CastField<FNumericProperty>(Property))
 		{

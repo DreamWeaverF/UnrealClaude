@@ -19,6 +19,8 @@ When working with Unreal Editor content, ALWAYS prefer MCP tools over filesystem
 - Use `blueprint_query` instead of reading .uasset files to inspect blueprints
 - MCP tools operate on the live editor state — filesystem tools see serialized data
 
+**Note on parameter names:** as of v1.4.4, `asset_search` uses `class_filter` (formerly `asset_type`) and `name_pattern` (formerly `search_term`). The old names still work via aliases but emit deprecation warnings — prefer the new names in new code.
+
 ### Tool Router (MANDATORY)
 
 Domain-specific operations MUST go through the `unreal_ue` router tool. NEVER call these tools directly:
@@ -57,10 +59,26 @@ When performing complex Unreal tasks, use parallel MCP tool calls and subagents 
 | **Per-object safe** (modifying) | spawn_actor, move_actor, set_property, blueprint_modify, material, character, character_data, asset, enhanced_input, anim_blueprint_modify | Parallelize on DIFFERENT actors/assets. Never modify same object from two calls. |
 | **Sequential only** | open_level, delete_actors, execute_script, cleanup_scripts, run_console_command | Must run alone. open_level invalidates all refs. |
 
+- Read-only tools are fast (~50-200ms). Modifying tools (blueprint, spawn) may take 1-5s each.
+- If a subagent needs 5+ sequential tool calls, budget ~30s and keep tasks focused.
+
 **When to use subagents (Task tool):**
 - Request maps to 3+ independent operations on different objects
+- Examples: "set up a level" → lighting agent + mesh agent + gameplay agent (3 subagents)
 - Lead agent surveys first (read-only), plans names, spawns subagents, verifies results
 - NEVER spawn more than 3 subagents — the task queue limit is 4 concurrent tasks total
+
+**When NOT to parallelize:**
+- Single-object operations — just call tools directly
+- Operations needing results from prior calls (spawn then move same actor)
+- Anything involving open_level, delete_actors, or execute_script
+- When the total parallel tool call count would exceed 4 (queue delays + timeout risk)
+
+**Subagent coordination:**
+1. Lead surveys state (get_level_actors, asset_search — parallel read-only calls)
+2. Lead plans decomposition with unique actor/asset names
+3. Lead spawns ≤3 subagents with explicit tool calls, names, and positions
+4. Lead verifies results (get_level_actors, capture_viewport)
 
 ### Key Directories
 - `Source/UnrealClaude/Private/MCP/` - MCP server and tool implementations
@@ -81,6 +99,29 @@ When performing complex Unreal tasks, use parallel MCP tool calls and subagents 
 Automation RunTests UnrealClaude
 ```
 
+**NOTE**: Binaries are no longer tracked in the repository (LFS removed). After building, copy from `<OUTPUT_PATH>/Binaries/Win64/` into your engine's `Engine/Plugins/Marketplace/UnrealClaude/Binaries/Win64/` folder for local use.
+
+### MCP Bridge (Git Submodule)
+
+`Resources/mcp-bridge/` is a **git submodule** pointing to [`Natfii/ue5-mcp-bridge`](https://github.com/Natfii/ue5-mcp-bridge).
+
+**Fresh clone setup:**
+```bash
+git clone --recurse-submodules https://github.com/Natfii/UnrealClaude.git
+# Or if already cloned without --recurse-submodules:
+git submodule update --init
+cd Resources/mcp-bridge && npm install
+```
+
+**Workflow for MCP bridge changes:**
+1. `cd Resources/mcp-bridge` — enter the submodule
+2. Make changes, commit, and push within the submodule (`git add . && git commit && git push`)
+3. `cd ../..` — return to parent repo
+4. `git add Resources/mcp-bridge` — stage the updated submodule ref
+5. Commit the parent repo to record the new submodule commit
+
+**Run tests:** `cd Resources/mcp-bridge && npm test`
+
 ---
 
 ## Unreal Engine 5.7 C++ Standards
@@ -95,6 +136,7 @@ Automation RunTests UnrealClaude
 - **Maximum 50 lines per function** - Extract helper functions for clarity
 - **Private/** folder for implementation files
 - **Public/** folder for headers meant for external use
+- **Copyright header** on all new source files: `// Copyright Natali Caggiano. All Rights Reserved.`
 
 ### UPROPERTY Specifiers (UE 5.7)
 ```cpp
@@ -144,6 +186,15 @@ FMCPToolResult FMCPTool_YourTool::Execute(const TSharedRef<FJsonObject>& Params)
     {
         return Error.GetValue();
     }
+
+    // Validate paths for security
+    if (!ValidateBlueprintPathParam(BlueprintPath, Error))
+    {
+        return Error.GetValue();
+    }
+
+    // Extract optional parameters with defaults
+    int32 OptionalInt = Params->GetIntegerField(TEXT("optional_param"));
 
     // Do work...
     return FMCPToolResult::Success(TEXT("Operation completed"));
@@ -253,7 +304,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FMyTest::RunTest(const FString& Parameters)
 {
     TestTrue("Description of what should be true", bCondition);
+    TestFalse("Description of what should be false", bCondition);
     TestEqual("Values should match", ActualValue, ExpectedValue);
+    TestNotNull("Pointer should not be null", Pointer);
+    TestNull("Pointer should be null", Pointer);
     return true;
 }
 ```
@@ -272,6 +326,12 @@ bool FMyTest::RunTest(const FString& Parameters)
 2. **Actor Name Validation**: Block special characters `<>|&;$(){}[]!*?~`
 3. **Console Command Validation**: Block dangerous commands (quit, crash, shutdown)
 4. **Numeric Validation**: Check for NaN, Infinity, reasonable bounds
+
+### Never Do
+- Execute arbitrary code without permission dialogs
+- Allow access to engine internals
+- Skip parameter validation
+- Trust user input without sanitization
 
 ---
 

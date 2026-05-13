@@ -17,19 +17,16 @@
  */
 enum class EMCPErrorCode : int32
 {
-	// Parameter errors (1xx)
 	MissingParameter = 100,
 	InvalidParameterType = 101,
 	InvalidParameterValue = 102,
 
-	// Validation errors (2xx)
 	ValidationFailed = 200,
 	PathTraversal = 201,
 	ForbiddenCommand = 202,
 	InvalidName = 203,
 	StringTooLong = 204,
 
-	// Not found errors (3xx)
 	ActorNotFound = 300,
 	BlueprintNotFound = 301,
 	ClassNotFound = 302,
@@ -39,14 +36,12 @@ enum class EMCPErrorCode : int32
 	NodeNotFound = 306,
 	ToolNotFound = 307,
 
-	// Operation errors (4xx)
 	OperationFailed = 400,
 	CompilationFailed = 401,
 	SpawnFailed = 402,
 	ConnectionFailed = 403,
 	CannotModify = 404,
 
-	// Context errors (5xx)
 	EditorNotAvailable = 500,
 	NoActiveWorld = 501,
 	ViewportNotAvailable = 502,
@@ -211,7 +206,6 @@ public:
 	}
 
 	// ===== Helpers for OutError pattern =====
-	// For functions using FString& OutError instead of FMCPToolResult
 
 	static void SetMissingParameter(FString& OutError, const FString& ParamName)
 	{

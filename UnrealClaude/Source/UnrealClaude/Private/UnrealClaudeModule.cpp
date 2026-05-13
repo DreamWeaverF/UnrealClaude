@@ -30,13 +30,11 @@ static const FName ClaudeTabName("ClaudeAssistant");
 void FUnrealClaudeModule::StartupModule()
 {
 	UE_LOG(LogUnrealClaude, Warning, TEXT("=== UnrealClaude BUILD 20260107-1450 THREAD_TESTS_DISABLED ==="));
-	
-	// Register commands
+
 	FUnrealClaudeCommands::Register();
-	
+
 	PluginCommands = MakeShared<FUICommandList>();
-	
-	// Map commands to actions
+
 	PluginCommands->MapAction(
 		FUnrealClaudeCommands::Get().OpenClaudePanel,
 		FExecuteAction::CreateLambda([]()
@@ -46,12 +44,10 @@ void FUnrealClaudeModule::StartupModule()
 		FCanExecuteAction()
 	);
 
-	// Map QuickAsk command - shows a popup for quick questions
 	PluginCommands->MapAction(
 		FUnrealClaudeCommands::Get().QuickAsk,
 		FExecuteAction::CreateLambda([]()
 		{
-			// Create a simple input dialog
 			TSharedRef<SWindow> QuickAskWindow = SNew(SWindow)
 				.Title(LOCTEXT("QuickAskTitle", "Quick Ask Claude"))
 				.ClientSize(FVector2D(500, 100))
@@ -79,10 +75,8 @@ void FUnrealClaudeModule::StartupModule()
 					{
 						if (CommitType == ETextCommit::OnEnter && !Text.IsEmpty())
 						{
-							// Close the window
 							QuickAskWindow->RequestDestroyWindow();
 
-							// Send prompt to Claude
 							FString Prompt = Text.ToString();
 							FClaudePromptOptions Options;
 							Options.bIncludeEngineContext = true;
@@ -91,7 +85,6 @@ void FUnrealClaudeModule::StartupModule()
 								Prompt,
 								FOnClaudeResponse::CreateLambda([](const FString& Response, bool bSuccess)
 								{
-									// Show response in notification
 									FNotificationInfo Info(FText::FromString(
 										bSuccess
 											? (Response.Len() > 300 ? Response.Left(300) + TEXT("...") : Response)
@@ -110,7 +103,6 @@ void FUnrealClaudeModule::StartupModule()
 
 			FSlateApplication::Get().AddWindow(QuickAskWindow);
 
-			// Focus the input box
 			if (InputBox.IsValid())
 			{
 				FSlateApplication::Get().SetKeyboardFocus(InputBox);
@@ -122,7 +114,6 @@ void FUnrealClaudeModule::StartupModule()
 		})
 	);
 
-	// Register the tab spawner
 	FGlobalTabmanager::Get()->RegisterNomadTabSpawner(
 		ClaudeTabName,
 		FOnSpawnTab::CreateLambda([](const FSpawnTabArgs& Args) -> TSharedRef<SDockTab>
@@ -138,15 +129,13 @@ void FUnrealClaudeModule::StartupModule()
 		.SetTooltipText(LOCTEXT("ClaudeTabTooltip", "Open the Claude AI Assistant for UE5.7 development help"))
 		.SetGroup(WorkspaceMenu::GetMenuStructure().GetToolsCategory())
 		.SetIcon(FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Help"));
-	
-	// Register menus after engine init
+
+	// Defer menu registration until UToolMenus is initialized post-engine-startup
 	UToolMenus::RegisterStartupCallback(FSimpleMulticastDelegate::FDelegate::CreateRaw(this, &FUnrealClaudeModule::RegisterMenus));
 
-	// Bind keyboard shortcuts to the Level Editor
 	FLevelEditorModule& LevelEditorModule = FModuleManager::LoadModuleChecked<FLevelEditorModule>("LevelEditor");
 	LevelEditorModule.GetGlobalLevelEditorActions()->Append(PluginCommands.ToSharedRef());
 
-	// Check Claude availability
 	if (FClaudeCodeRunner::IsClaudeAvailable())
 	{
 		UE_LOG(LogUnrealClaude, Log, TEXT("Claude CLI found at: %s"), *FClaudeCodeRunner::GetClaudePath());
@@ -156,13 +145,12 @@ void FUnrealClaudeModule::StartupModule()
 		UE_LOG(LogUnrealClaude, Warning, TEXT("Claude CLI not found. Please install with: npm install -g @anthropic-ai/claude-code"));
 	}
 
-	// Start MCP Server
 	StartMCPServer();
 
-	// Initialize project context (async, will gather in background)
+	// Kick off project-context gather; first GetContext call after this will use the cached result
 	FProjectContextManager::Get().RefreshContext();
 
-	// Initialize script execution manager (creates script directories)
+	// First Get() call constructs the singleton, which lazily creates script directories
 	FScriptExecutionManager::Get();
 }
 
@@ -170,7 +158,6 @@ void FUnrealClaudeModule::ShutdownModule()
 {
 	UE_LOG(LogUnrealClaude, Log, TEXT("UnrealClaude module shutting down"));
 
-	// Stop MCP Server
 	StopMCPServer();
 
 	UToolMenus::UnRegisterStartupCallback(this);
@@ -193,10 +180,9 @@ bool FUnrealClaudeModule::IsAvailable()
 
 void FUnrealClaudeModule::RegisterMenus()
 {
-	// Owner will be used for cleanup in call to UToolMenus::UnregisterOwner
+	// Owner scope ensures our entries can be cleanly removed by UToolMenus::UnregisterOwner on shutdown
 	FToolMenuOwnerScoped OwnerScoped(this);
-	
-	// Add to the main menu bar under Tools
+
 	{
 		UToolMenu* Menu = UToolMenus::Get()->ExtendMenu("LevelEditor.MainMenu.Tools");
 		FToolMenuSection& Section = Menu->FindOrAddSection("UnrealClaude");
@@ -217,8 +203,7 @@ void FUnrealClaudeModule::RegisterMenus()
 			FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Help")
 		);
 	}
-	
-	// Add to the toolbar
+
 	{
 		UToolMenu* ToolbarMenu = UToolMenus::Get()->ExtendMenu("LevelEditor.LevelEditorToolBar.PlayToolBar");
 		FToolMenuSection& Section = ToolbarMenu->FindOrAddSection("UnrealClaude");

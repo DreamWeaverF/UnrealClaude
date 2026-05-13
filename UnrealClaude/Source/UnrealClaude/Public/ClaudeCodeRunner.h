@@ -21,7 +21,6 @@ public:
 	FClaudeCodeRunner();
 	virtual ~FClaudeCodeRunner();
 
-	// IClaudeRunner interface
 	virtual bool ExecuteAsync(
 		const FClaudeRequestConfig& Config,
 		FOnClaudeResponse OnComplete,
@@ -41,7 +40,6 @@ public:
 	/** Get the Claude CLI path */
 	static FString GetClaudePath();
 
-	// FRunnable interface
 	virtual bool Init() override;
 	virtual uint32 Run() override;
 	virtual void Stop() override;
@@ -147,10 +145,9 @@ public:
 
 private:
 
-	// Process handle (FProcHandle stored as void* for atomic exchange compatibility)
+	// FProcHandle stored as void* for atomic exchange compatibility
 	FProcHandle ProcessHandle;
 
-	// Pipe handles (UE cross-platform pipe handles)
 	void* ReadPipe;
 	void* WritePipe;
 	void* StdInReadPipe;

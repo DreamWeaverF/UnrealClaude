@@ -8,25 +8,23 @@
 
 FMCPToolResult FMCPTool_ExecuteScript::Execute(const TSharedRef<FJsonObject>& Params)
 {
-	// Check if this is a synchronous call from the task queue
+	// `_sync` flag is set by the task queue when invoking us back to actually run the script
 	bool bSync = false;
 	Params->TryGetBoolField(TEXT("_sync"), bSync);
 
 	if (bSync)
 	{
-		// Called from task queue - execute synchronously
 		return ExecuteSync(Params);
 	}
 
-	// Async execution - submit to task queue
 	if (!TaskQueue.IsValid())
 	{
-		// Fallback to sync if no task queue (shouldn't happen in practice)
+		// Defensive fallback — initialization should always wire up the task queue
 		UE_LOG(LogUnrealClaude, Warning, TEXT("execute_script: No task queue available, falling back to sync execution"));
 		return ExecuteSync(Params);
 	}
 
-	// Clone params and add _sync flag for when task queue executes
+	// Clone params so we can set the _sync flag without mutating the caller's JSON
 	TSharedPtr<FJsonObject> AsyncParams = MakeShared<FJsonObject>();
 	for (const auto& Field : Params->Values)
 	{
@@ -34,7 +32,7 @@ FMCPToolResult FMCPTool_ExecuteScript::Execute(const TSharedRef<FJsonObject>& Pa
 	}
 	AsyncParams->SetBoolField(TEXT("_sync"), true);
 
-	// Submit with 10-minute timeout for permission dialogs
+	// Scripts can trigger permission dialogs that wait for user input; budget 10 minutes
 	constexpr uint32 ScriptTimeoutMs = 600000; // 10 minutes
 	FGuid TaskId = TaskQueue->SubmitTask(TEXT("execute_script"), AsyncParams, ScriptTimeoutMs);
 
@@ -43,14 +41,12 @@ FMCPToolResult FMCPTool_ExecuteScript::Execute(const TSharedRef<FJsonObject>& Pa
 		return FMCPToolResult::Error(TEXT("Failed to submit script execution task - queue may be at capacity"));
 	}
 
-	// Return task ID for polling
 	TSharedPtr<FJsonObject> ResultData = MakeShared<FJsonObject>();
 	ResultData->SetStringField(TEXT("task_id"), TaskId.ToString());
 	ResultData->SetStringField(TEXT("status"), TEXT("pending"));
 	ResultData->SetStringField(TEXT("message"), TEXT("Script submitted for execution. Use task_status/task_result to check progress."));
 	ResultData->SetNumberField(TEXT("timeout_ms"), ScriptTimeoutMs);
 
-	// Include script info
 	FString ScriptType, Description;
 	Params->TryGetStringField(TEXT("script_type"), ScriptType);
 	Params->TryGetStringField(TEXT("description"), Description);
@@ -68,28 +64,23 @@ FMCPToolResult FMCPTool_ExecuteScript::Execute(const TSharedRef<FJsonObject>& Pa
 
 FMCPToolResult FMCPTool_ExecuteScript::ExecuteSync(const TSharedRef<FJsonObject>& Params)
 {
-	// Get script type
 	FString ScriptTypeStr;
 	if (!Params->TryGetStringField(TEXT("script_type"), ScriptTypeStr))
 	{
 		return FMCPToolResult::Error(TEXT("Missing required parameter: script_type"));
 	}
 
-	// Get script content
 	FString ScriptContent;
 	if (!Params->TryGetStringField(TEXT("script_content"), ScriptContent))
 	{
 		return FMCPToolResult::Error(TEXT("Missing required parameter: script_content"));
 	}
 
-	// Get optional description
 	FString Description;
 	Params->TryGetStringField(TEXT("description"), Description);
 
-	// Parse script type
 	EScriptType ScriptType = StringToScriptType(ScriptTypeStr);
 
-	// Validate that script has @Description in header
 	FString HeaderDescription = ScriptHeader::ParseDescription(ScriptContent);
 	if (HeaderDescription == TEXT("No description provided") && Description.IsEmpty())
 	{
@@ -103,7 +94,6 @@ FMCPToolResult FMCPTool_ExecuteScript::ExecuteSync(const TSharedRef<FJsonObject>
 		);
 	}
 
-	// Use header description if no parameter provided
 	if (Description.IsEmpty())
 	{
 		Description = HeaderDescription;
@@ -111,20 +101,17 @@ FMCPToolResult FMCPTool_ExecuteScript::ExecuteSync(const TSharedRef<FJsonObject>
 
 	UE_LOG(LogUnrealClaude, Log, TEXT("Executing %s script: %s"), *ScriptTypeStr, *Description);
 
-	// Execute script via manager
 	FScriptExecutionResult Result = FScriptExecutionManager::Get().ExecuteScript(
 		ScriptType,
 		ScriptContent,
 		Description
 	);
 
-	// Build result data
 	TSharedPtr<FJsonObject> ResultData = MakeShared<FJsonObject>();
 	ResultData->SetStringField(TEXT("script_type"), ScriptTypeStr);
 	ResultData->SetStringField(TEXT("description"), Description);
 	ResultData->SetNumberField(TEXT("retry_count"), Result.RetryCount);
 
-	// Add compile_status for C++ scripts
 	if (ScriptTypeStr.ToLower() == TEXT("cpp"))
 	{
 		ResultData->SetStringField(TEXT("compile_status"),
@@ -138,12 +125,12 @@ FMCPToolResult FMCPTool_ExecuteScript::ExecuteSync(const TSharedRef<FJsonObject>
 	}
 	else
 	{
-		// Always include full output so errors aren't lost
+		// Fall back to ErrorOutput when Output is empty so the caller can always see what went wrong
 		ResultData->SetStringField(TEXT("output"),
 			Result.Output.IsEmpty() ? Result.ErrorOutput : Result.Output);
 		ResultData->SetStringField(TEXT("error"), Result.ErrorOutput);
 
-		// Classify error type for easier handling
+		// Tag error_type so the LLM can branch on compile vs syntax vs runtime failures
 		FString ErrorType = TEXT("execution_error");
 		if (ScriptTypeStr.ToLower() == TEXT("cpp"))
 		{
@@ -160,7 +147,6 @@ FMCPToolResult FMCPTool_ExecuteScript::ExecuteSync(const TSharedRef<FJsonObject>
 		}
 		ResultData->SetStringField(TEXT("error_type"), ErrorType);
 
-		// Return error with detailed info for auto-retry
 		FMCPToolResult ErrorResult;
 		ErrorResult.bSuccess = false;
 		ErrorResult.Message = Result.Message;
