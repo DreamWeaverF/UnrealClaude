@@ -1,338 +1,533 @@
 // Copyright Natali Caggiano. All Rights Reserved.
 
 /**
- * Unit tests for MCPParamValidator
- * Tests security-critical validation logic for MCP tool parameters
+ * Unit tests for MCPParamValidator.
+ * BDD-style spec — see UE Automation Spec docs for Describe/It structure.
  */
 
 #include "CoreMinimal.h"
 #include "Misc/AutomationTest.h"
 #include "MCP/MCPParamValidator.h"
+#include "UnrealClaudeTestFlags.h"
+
+#include <limits>
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-// ===== Actor Name Validation Tests =====
+BEGIN_DEFINE_SPEC(
+	FMCPParamValidatorSpec,
+	"UnrealClaude.MCP.ParamValidator",
+	UnrealClaudeTest::DefaultTestFlags)
+END_DEFINE_SPEC(FMCPParamValidatorSpec)
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FMCPParamValidator_ValidateActorName_ValidNames,
-	"UnrealClaude.MCP.ParamValidator.ActorName.ValidNames",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter
-)
-
-bool FMCPParamValidator_ValidateActorName_ValidNames::RunTest(const FString& Parameters)
+void FMCPParamValidatorSpec::Define()
 {
-	FString Error;
-
-	// Valid simple names
-	TestTrue("Simple name should be valid", FMCPParamValidator::ValidateActorName(TEXT("MyActor"), Error));
-	TestTrue("Name with numbers should be valid", FMCPParamValidator::ValidateActorName(TEXT("Actor123"), Error));
-	TestTrue("Name with underscore should be valid", FMCPParamValidator::ValidateActorName(TEXT("My_Actor"), Error));
-	TestTrue("Name with dash should be valid", FMCPParamValidator::ValidateActorName(TEXT("My-Actor"), Error));
-	TestTrue("Name with spaces should be valid", FMCPParamValidator::ValidateActorName(TEXT("My Actor"), Error));
-
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FMCPParamValidator_ValidateActorName_InvalidNames,
-	"UnrealClaude.MCP.ParamValidator.ActorName.InvalidNames",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter
-)
-
-bool FMCPParamValidator_ValidateActorName_InvalidNames::RunTest(const FString& Parameters)
-{
-	FString Error;
-
-	// Empty name
-	TestFalse("Empty name should be invalid", FMCPParamValidator::ValidateActorName(TEXT(""), Error));
-	TestTrue("Error message for empty name", Error.Contains(TEXT("empty")));
-
-	// Names with dangerous characters
-	TestFalse("Name with < should be invalid", FMCPParamValidator::ValidateActorName(TEXT("Actor<Script>"), Error));
-	TestFalse("Name with > should be invalid", FMCPParamValidator::ValidateActorName(TEXT("Actor>test"), Error));
-	TestFalse("Name with | should be invalid", FMCPParamValidator::ValidateActorName(TEXT("Actor|test"), Error));
-	TestFalse("Name with & should be invalid", FMCPParamValidator::ValidateActorName(TEXT("Actor&test"), Error));
-	TestFalse("Name with ; should be invalid", FMCPParamValidator::ValidateActorName(TEXT("Actor;drop"), Error));
-	TestFalse("Name with ` should be invalid", FMCPParamValidator::ValidateActorName(TEXT("Actor`cmd`"), Error));
-	TestFalse("Name with $ should be invalid", FMCPParamValidator::ValidateActorName(TEXT("Actor$var"), Error));
-	TestFalse("Name with ( should be invalid", FMCPParamValidator::ValidateActorName(TEXT("Actor(test)"), Error));
-	TestFalse("Name with { should be invalid", FMCPParamValidator::ValidateActorName(TEXT("Actor{test}"), Error));
-	TestFalse("Name with [ should be invalid", FMCPParamValidator::ValidateActorName(TEXT("Actor[0]"), Error));
-	TestFalse("Name with ! should be invalid", FMCPParamValidator::ValidateActorName(TEXT("Actor!"), Error));
-	TestFalse("Name with * should be invalid", FMCPParamValidator::ValidateActorName(TEXT("Actor*"), Error));
-	TestFalse("Name with ? should be invalid", FMCPParamValidator::ValidateActorName(TEXT("Actor?"), Error));
-	TestFalse("Name with ~ should be invalid", FMCPParamValidator::ValidateActorName(TEXT("~Actor"), Error));
-
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FMCPParamValidator_ValidateActorName_LengthLimits,
-	"UnrealClaude.MCP.ParamValidator.ActorName.LengthLimits",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter
-)
-
-bool FMCPParamValidator_ValidateActorName_LengthLimits::RunTest(const FString& Parameters)
-{
-	FString Error;
-
-	// Create a string that exceeds max length (256 chars)
-	FString LongName;
-	for (int32 i = 0; i < 300; i++)
+	Describe(TEXT("ValidateActorName"), [this]()
 	{
-		LongName += TEXT("A");
-	}
+		Describe(TEXT("accepts"), [this]()
+		{
+			It("a simple alphabetic name", [this]()
+			{
+				FString Error;
+				TestTrue(TEXT("MyActor"), FMCPParamValidator::ValidateActorName(TEXT("MyActor"), Error));
+			});
 
-	TestFalse("Name exceeding max length should be invalid", FMCPParamValidator::ValidateActorName(LongName, Error));
-	TestTrue("Error should mention length", Error.Contains(TEXT("length")) || Error.Contains(TEXT("256")));
+			It("a name with digits", [this]()
+			{
+				FString Error;
+				TestTrue(TEXT("Actor123"), FMCPParamValidator::ValidateActorName(TEXT("Actor123"), Error));
+			});
 
-	return true;
-}
+			It("a name with an underscore", [this]()
+			{
+				FString Error;
+				TestTrue(TEXT("My_Actor"), FMCPParamValidator::ValidateActorName(TEXT("My_Actor"), Error));
+			});
 
-// ===== Console Command Validation Tests =====
+			It("a name with a dash", [this]()
+			{
+				FString Error;
+				TestTrue(TEXT("My-Actor"), FMCPParamValidator::ValidateActorName(TEXT("My-Actor"), Error));
+			});
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FMCPParamValidator_ValidateConsoleCommand_BlockedCommands,
-	"UnrealClaude.MCP.ParamValidator.ConsoleCommand.BlockedCommands",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter
-)
+			It("a name with spaces", [this]()
+			{
+				FString Error;
+				TestTrue(TEXT("My Actor"), FMCPParamValidator::ValidateActorName(TEXT("My Actor"), Error));
+			});
+		});
 
-bool FMCPParamValidator_ValidateConsoleCommand_BlockedCommands::RunTest(const FString& Parameters)
-{
-	FString Error;
+		Describe(TEXT("rejects"), [this]()
+		{
+			It("an empty name with a length-related error message", [this]()
+			{
+				FString Error;
+				TestFalse(TEXT("empty string"), FMCPParamValidator::ValidateActorName(TEXT(""), Error));
+				TestTrue(TEXT("error mentions emptiness"), Error.Contains(TEXT("empty")));
+			});
 
-	// Test blocked commands
-	TestFalse("quit should be blocked", FMCPParamValidator::ValidateConsoleCommand(TEXT("quit"), Error));
-	TestFalse("exit should be blocked", FMCPParamValidator::ValidateConsoleCommand(TEXT("exit"), Error));
-	TestFalse("crash should be blocked", FMCPParamValidator::ValidateConsoleCommand(TEXT("crash"), Error));
-	TestFalse("forcecrash should be blocked", FMCPParamValidator::ValidateConsoleCommand(TEXT("forcecrash"), Error));
-	TestFalse("shutdown should be blocked", FMCPParamValidator::ValidateConsoleCommand(TEXT("shutdown"), Error));
+			It("a name containing '<'", [this]()
+			{
+				FString Error;
+				TestFalse(TEXT("Actor<Script>"), FMCPParamValidator::ValidateActorName(TEXT("Actor<Script>"), Error));
+			});
 
-	// Test case insensitivity
-	TestFalse("QUIT should be blocked", FMCPParamValidator::ValidateConsoleCommand(TEXT("QUIT"), Error));
-	TestFalse("Quit should be blocked", FMCPParamValidator::ValidateConsoleCommand(TEXT("Quit"), Error));
+			It("a name containing '>'", [this]()
+			{
+				FString Error;
+				TestFalse(TEXT("Actor>test"), FMCPParamValidator::ValidateActorName(TEXT("Actor>test"), Error));
+			});
 
-	// Test prefix matching
-	TestFalse("gc.CollectGarbage should be blocked", FMCPParamValidator::ValidateConsoleCommand(TEXT("gc.CollectGarbage"), Error));
-	TestFalse("r.ScreenPercentage should be blocked", FMCPParamValidator::ValidateConsoleCommand(TEXT("r.ScreenPercentage 50"), Error));
+			It("a name containing '|'", [this]()
+			{
+				FString Error;
+				TestFalse(TEXT("Actor|test"), FMCPParamValidator::ValidateActorName(TEXT("Actor|test"), Error));
+			});
 
-	return true;
-}
+			It("a name containing '&'", [this]()
+			{
+				FString Error;
+				TestFalse(TEXT("Actor&test"), FMCPParamValidator::ValidateActorName(TEXT("Actor&test"), Error));
+			});
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FMCPParamValidator_ValidateConsoleCommand_ChainAttempts,
-	"UnrealClaude.MCP.ParamValidator.ConsoleCommand.ChainAttempts",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter
-)
+			It("a name containing ';'", [this]()
+			{
+				FString Error;
+				TestFalse(TEXT("Actor;drop"), FMCPParamValidator::ValidateActorName(TEXT("Actor;drop"), Error));
+			});
 
-bool FMCPParamValidator_ValidateConsoleCommand_ChainAttempts::RunTest(const FString& Parameters)
-{
-	FString Error;
+			It("a name containing a backtick", [this]()
+			{
+				FString Error;
+				TestFalse(TEXT("Actor`cmd`"), FMCPParamValidator::ValidateActorName(TEXT("Actor`cmd`"), Error));
+			});
 
-	// Command chaining attempts
-	TestFalse("Semicolon chaining should be blocked",
-		FMCPParamValidator::ValidateConsoleCommand(TEXT("stat fps; quit"), Error));
-	TestFalse("Pipe chaining should be blocked",
-		FMCPParamValidator::ValidateConsoleCommand(TEXT("stat fps | quit"), Error));
-	TestFalse("AND chaining should be blocked",
-		FMCPParamValidator::ValidateConsoleCommand(TEXT("stat fps && quit"), Error));
+			It("a name containing '$'", [this]()
+			{
+				FString Error;
+				TestFalse(TEXT("Actor$var"), FMCPParamValidator::ValidateActorName(TEXT("Actor$var"), Error));
+			});
 
-	// Shell escape attempts
-	TestFalse("Backtick escape should be blocked",
-		FMCPParamValidator::ValidateConsoleCommand(TEXT("stat `quit`"), Error));
-	TestFalse("$() escape should be blocked",
-		FMCPParamValidator::ValidateConsoleCommand(TEXT("stat $(quit)"), Error));
-	TestFalse("${} escape should be blocked",
-		FMCPParamValidator::ValidateConsoleCommand(TEXT("stat ${quit}"), Error));
+			It("a name containing parentheses", [this]()
+			{
+				FString Error;
+				TestFalse(TEXT("Actor(test)"), FMCPParamValidator::ValidateActorName(TEXT("Actor(test)"), Error));
+			});
 
-	return true;
-}
+			It("a name containing braces", [this]()
+			{
+				FString Error;
+				TestFalse(TEXT("Actor{test}"), FMCPParamValidator::ValidateActorName(TEXT("Actor{test}"), Error));
+			});
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FMCPParamValidator_ValidateConsoleCommand_ValidCommands,
-	"UnrealClaude.MCP.ParamValidator.ConsoleCommand.ValidCommands",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter
-)
+			It("a name containing brackets", [this]()
+			{
+				FString Error;
+				TestFalse(TEXT("Actor[0]"), FMCPParamValidator::ValidateActorName(TEXT("Actor[0]"), Error));
+			});
 
-bool FMCPParamValidator_ValidateConsoleCommand_ValidCommands::RunTest(const FString& Parameters)
-{
-	FString Error;
+			It("a name containing '!'", [this]()
+			{
+				FString Error;
+				TestFalse(TEXT("Actor!"), FMCPParamValidator::ValidateActorName(TEXT("Actor!"), Error));
+			});
 
-	// Valid safe commands
-	TestTrue("stat fps should be valid", FMCPParamValidator::ValidateConsoleCommand(TEXT("stat fps"), Error));
-	TestTrue("stat unit should be valid", FMCPParamValidator::ValidateConsoleCommand(TEXT("stat unit"), Error));
-	TestTrue("showlog should be valid", FMCPParamValidator::ValidateConsoleCommand(TEXT("showlog"), Error));
-	TestTrue("show collision should be valid", FMCPParamValidator::ValidateConsoleCommand(TEXT("show collision"), Error));
+			It("a name containing '*'", [this]()
+			{
+				FString Error;
+				TestFalse(TEXT("Actor*"), FMCPParamValidator::ValidateActorName(TEXT("Actor*"), Error));
+			});
 
-	return true;
-}
+			It("a name containing '?'", [this]()
+			{
+				FString Error;
+				TestFalse(TEXT("Actor?"), FMCPParamValidator::ValidateActorName(TEXT("Actor?"), Error));
+			});
 
-// ===== Blueprint Path Validation Tests =====
+			It("a name containing '~'", [this]()
+			{
+				FString Error;
+				TestFalse(TEXT("~Actor"), FMCPParamValidator::ValidateActorName(TEXT("~Actor"), Error));
+			});
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FMCPParamValidator_ValidateBlueprintPath_Security,
-	"UnrealClaude.MCP.ParamValidator.BlueprintPath.Security",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter
-)
+			It("a name exceeding the max length with a length-related error message", [this]()
+			{
+				FString LongName;
+				for (int32 i = 0; i < 300; i++)
+				{
+					LongName += TEXT("A");
+				}
+				FString Error;
+				TestFalse(TEXT("300-char name"), FMCPParamValidator::ValidateActorName(LongName, Error));
+				TestTrue(TEXT("error mentions length or 256"),
+					Error.Contains(TEXT("length")) || Error.Contains(TEXT("256")));
+			});
+		});
+	});
 
-bool FMCPParamValidator_ValidateBlueprintPath_Security::RunTest(const FString& Parameters)
-{
-	FString Error;
+	Describe(TEXT("ValidateConsoleCommand"), [this]()
+	{
+		Describe(TEXT("blocks dangerous commands"), [this]()
+		{
+			It("blocks 'quit'", [this]()
+			{
+				FString Error;
+				TestFalse(TEXT("quit"), FMCPParamValidator::ValidateConsoleCommand(TEXT("quit"), Error));
+			});
 
-	// Block engine Blueprints
-	TestFalse("/Engine/ paths should be blocked",
-		FMCPParamValidator::ValidateBlueprintPath(TEXT("/Engine/EditorBlueprintResources/StandardMacros"), Error));
-	TestFalse("/Script/ paths should be blocked",
-		FMCPParamValidator::ValidateBlueprintPath(TEXT("/Script/Engine.Actor"), Error));
+			It("blocks 'exit'", [this]()
+			{
+				FString Error;
+				TestFalse(TEXT("exit"), FMCPParamValidator::ValidateConsoleCommand(TEXT("exit"), Error));
+			});
 
-	// Path traversal
-	TestFalse("Path traversal should be blocked",
-		FMCPParamValidator::ValidateBlueprintPath(TEXT("/Game/../Engine/SomeBP"), Error));
+			It("blocks 'crash'", [this]()
+			{
+				FString Error;
+				TestFalse(TEXT("crash"), FMCPParamValidator::ValidateConsoleCommand(TEXT("crash"), Error));
+			});
 
-	// Valid game paths
-	TestTrue("/Game/ paths should be valid",
-		FMCPParamValidator::ValidateBlueprintPath(TEXT("/Game/Blueprints/BP_MyActor"), Error));
+			It("blocks 'forcecrash'", [this]()
+			{
+				FString Error;
+				TestFalse(TEXT("forcecrash"), FMCPParamValidator::ValidateConsoleCommand(TEXT("forcecrash"), Error));
+			});
 
-	return true;
-}
+			It("blocks 'shutdown'", [this]()
+			{
+				FString Error;
+				TestFalse(TEXT("shutdown"), FMCPParamValidator::ValidateConsoleCommand(TEXT("shutdown"), Error));
+			});
 
-// ===== Property Path Validation Tests =====
+			It("is case-insensitive for blocked commands", [this]()
+			{
+				FString Error;
+				TestFalse(TEXT("QUIT"), FMCPParamValidator::ValidateConsoleCommand(TEXT("QUIT"), Error));
+				TestFalse(TEXT("Quit"), FMCPParamValidator::ValidateConsoleCommand(TEXT("Quit"), Error));
+			});
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FMCPParamValidator_ValidatePropertyPath_Format,
-	"UnrealClaude.MCP.ParamValidator.PropertyPath.Format",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter
-)
+			It("blocks commands by prefix", [this]()
+			{
+				FString Error;
+				TestFalse(TEXT("gc.CollectGarbage"),
+					FMCPParamValidator::ValidateConsoleCommand(TEXT("gc.CollectGarbage"), Error));
+				TestFalse(TEXT("r.ScreenPercentage 50"),
+					FMCPParamValidator::ValidateConsoleCommand(TEXT("r.ScreenPercentage 50"), Error));
+			});
+		});
 
-bool FMCPParamValidator_ValidatePropertyPath_Format::RunTest(const FString& Parameters)
-{
-	FString Error;
+		Describe(TEXT("blocks command chaining and shell escapes"), [this]()
+		{
+			It("blocks semicolon chaining", [this]()
+			{
+				FString Error;
+				TestFalse(TEXT("stat fps; quit"),
+					FMCPParamValidator::ValidateConsoleCommand(TEXT("stat fps; quit"), Error));
+			});
 
-	// Valid property paths
-	TestTrue("Simple property should be valid",
-		FMCPParamValidator::ValidatePropertyPath(TEXT("MyProperty"), Error));
-	TestTrue("Nested property should be valid",
-		FMCPParamValidator::ValidatePropertyPath(TEXT("Component.SubProperty"), Error));
-	TestTrue("Property with underscore should be valid",
-		FMCPParamValidator::ValidatePropertyPath(TEXT("My_Property"), Error));
+			It("blocks pipe chaining", [this]()
+			{
+				FString Error;
+				TestFalse(TEXT("stat fps | quit"),
+					FMCPParamValidator::ValidateConsoleCommand(TEXT("stat fps | quit"), Error));
+			});
 
-	// Invalid property paths
-	TestFalse("Empty path should be invalid",
-		FMCPParamValidator::ValidatePropertyPath(TEXT(""), Error));
-	TestFalse("Path traversal should be blocked",
-		FMCPParamValidator::ValidatePropertyPath(TEXT("..Parent.Prop"), Error));
-	TestFalse("Leading dot should be invalid",
-		FMCPParamValidator::ValidatePropertyPath(TEXT(".Property"), Error));
-	TestFalse("Trailing dot should be invalid",
-		FMCPParamValidator::ValidatePropertyPath(TEXT("Property."), Error));
-	TestFalse("Special characters should be invalid",
-		FMCPParamValidator::ValidatePropertyPath(TEXT("Property<T>"), Error));
+			It("blocks '&&' chaining", [this]()
+			{
+				FString Error;
+				TestFalse(TEXT("stat fps && quit"),
+					FMCPParamValidator::ValidateConsoleCommand(TEXT("stat fps && quit"), Error));
+			});
 
-	return true;
-}
+			It("blocks backtick escapes", [this]()
+			{
+				FString Error;
+				TestFalse(TEXT("stat `quit`"),
+					FMCPParamValidator::ValidateConsoleCommand(TEXT("stat `quit`"), Error));
+			});
 
-// ===== Numeric Value Validation Tests =====
+			It("blocks $() escapes", [this]()
+			{
+				FString Error;
+				TestFalse(TEXT("stat $(quit)"),
+					FMCPParamValidator::ValidateConsoleCommand(TEXT("stat $(quit)"), Error));
+			});
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FMCPParamValidator_ValidateNumericValue_EdgeCases,
-	"UnrealClaude.MCP.ParamValidator.NumericValue.EdgeCases",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter
-)
+			It("blocks ${} escapes", [this]()
+			{
+				FString Error;
+				TestFalse(TEXT("stat ${quit}"),
+					FMCPParamValidator::ValidateConsoleCommand(TEXT("stat ${quit}"), Error));
+			});
+		});
 
-bool FMCPParamValidator_ValidateNumericValue_EdgeCases::RunTest(const FString& Parameters)
-{
-	FString Error;
+		Describe(TEXT("accepts safe commands"), [this]()
+		{
+			It("accepts 'stat fps'", [this]()
+			{
+				FString Error;
+				TestTrue(TEXT("stat fps"), FMCPParamValidator::ValidateConsoleCommand(TEXT("stat fps"), Error));
+			});
 
-	// Valid values
-	TestTrue("Zero should be valid",
-		FMCPParamValidator::ValidateNumericValue(0.0, TEXT("test"), Error));
-	TestTrue("Positive value should be valid",
-		FMCPParamValidator::ValidateNumericValue(100.0, TEXT("test"), Error));
-	TestTrue("Negative value should be valid",
-		FMCPParamValidator::ValidateNumericValue(-100.0, TEXT("test"), Error));
+			It("accepts 'stat unit'", [this]()
+			{
+				FString Error;
+				TestTrue(TEXT("stat unit"), FMCPParamValidator::ValidateConsoleCommand(TEXT("stat unit"), Error));
+			});
 
-	// Invalid values
-	TestFalse("NaN should be invalid",
-		FMCPParamValidator::ValidateNumericValue(std::numeric_limits<double>::quiet_NaN(), TEXT("test"), Error));
-	TestFalse("Positive infinity should be invalid",
-		FMCPParamValidator::ValidateNumericValue(std::numeric_limits<double>::infinity(), TEXT("test"), Error));
-	TestFalse("Negative infinity should be invalid",
-		FMCPParamValidator::ValidateNumericValue(-std::numeric_limits<double>::infinity(), TEXT("test"), Error));
+			It("accepts 'showlog'", [this]()
+			{
+				FString Error;
+				TestTrue(TEXT("showlog"), FMCPParamValidator::ValidateConsoleCommand(TEXT("showlog"), Error));
+			});
 
-	// Bounds checking with custom max
-	TestFalse("Value exceeding max should be invalid",
-		FMCPParamValidator::ValidateNumericValue(1e10, TEXT("test"), Error, 1e6));
+			It("accepts 'show collision'", [this]()
+			{
+				FString Error;
+				TestTrue(TEXT("show collision"),
+					FMCPParamValidator::ValidateConsoleCommand(TEXT("show collision"), Error));
+			});
+		});
+	});
 
-	return true;
-}
+	Describe(TEXT("ValidateBlueprintPath"), [this]()
+	{
+		It("blocks /Engine/ paths", [this]()
+		{
+			FString Error;
+			TestFalse(TEXT("/Engine/..."),
+				FMCPParamValidator::ValidateBlueprintPath(TEXT("/Engine/EditorBlueprintResources/StandardMacros"), Error));
+		});
 
-// ===== String Sanitization Tests =====
+		It("blocks /Script/ paths", [this]()
+		{
+			FString Error;
+			TestFalse(TEXT("/Script/Engine.Actor"),
+				FMCPParamValidator::ValidateBlueprintPath(TEXT("/Script/Engine.Actor"), Error));
+		});
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FMCPParamValidator_SanitizeString_RemovesDangerousChars,
-	"UnrealClaude.MCP.ParamValidator.SanitizeString.RemovesDangerousChars",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter
-)
+		It("blocks path traversal via '..'", [this]()
+		{
+			FString Error;
+			TestFalse(TEXT("/Game/../Engine/SomeBP"),
+				FMCPParamValidator::ValidateBlueprintPath(TEXT("/Game/../Engine/SomeBP"), Error));
+		});
 
-bool FMCPParamValidator_SanitizeString_RemovesDangerousChars::RunTest(const FString& Parameters)
-{
-	// Test that dangerous characters are removed
-	FString Sanitized = FMCPParamValidator::SanitizeString(TEXT("Hello<script>World</script>"));
-	TestFalse("< should be removed", Sanitized.Contains(TEXT("<")));
-	TestFalse("> should be removed", Sanitized.Contains(TEXT(">")));
-	TestTrue("Normal text should remain", Sanitized.Contains(TEXT("Hello")));
-	TestTrue("Normal text should remain", Sanitized.Contains(TEXT("World")));
+		It("accepts /Game/ paths", [this]()
+		{
+			FString Error;
+			TestTrue(TEXT("/Game/Blueprints/BP_MyActor"),
+				FMCPParamValidator::ValidateBlueprintPath(TEXT("/Game/Blueprints/BP_MyActor"), Error));
+		});
+	});
 
-	// Test shell escape removal
-	Sanitized = FMCPParamValidator::SanitizeString(TEXT("Hello`rm -rf`World"));
-	TestFalse("Backticks should be removed", Sanitized.Contains(TEXT("`")));
+	Describe(TEXT("ValidatePropertyPath"), [this]()
+	{
+		Describe(TEXT("accepts"), [this]()
+		{
+			It("a simple property name", [this]()
+			{
+				FString Error;
+				TestTrue(TEXT("MyProperty"),
+					FMCPParamValidator::ValidatePropertyPath(TEXT("MyProperty"), Error));
+			});
 
-	// Test dollar sign removal
-	Sanitized = FMCPParamValidator::SanitizeString(TEXT("Hello$(cmd)World"));
-	TestFalse("$ should be removed", Sanitized.Contains(TEXT("$")));
-	TestFalse("( should be removed", Sanitized.Contains(TEXT("(")));
-	TestFalse(") should be removed", Sanitized.Contains(TEXT(")")));
+			It("a nested property path", [this]()
+			{
+				FString Error;
+				TestTrue(TEXT("Component.SubProperty"),
+					FMCPParamValidator::ValidatePropertyPath(TEXT("Component.SubProperty"), Error));
+			});
 
-	return true;
-}
+			It("a property with an underscore", [this]()
+			{
+				FString Error;
+				TestTrue(TEXT("My_Property"),
+					FMCPParamValidator::ValidatePropertyPath(TEXT("My_Property"), Error));
+			});
+		});
 
-// ===== Blueprint Variable/Function Name Tests =====
+		Describe(TEXT("rejects"), [this]()
+		{
+			It("an empty path", [this]()
+			{
+				FString Error;
+				TestFalse(TEXT("empty"), FMCPParamValidator::ValidatePropertyPath(TEXT(""), Error));
+			});
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FMCPParamValidator_ValidateBlueprintNames,
-	"UnrealClaude.MCP.ParamValidator.BlueprintNames.Validation",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter
-)
+			It("a path starting with '..'", [this]()
+			{
+				FString Error;
+				TestFalse(TEXT("..Parent.Prop"),
+					FMCPParamValidator::ValidatePropertyPath(TEXT("..Parent.Prop"), Error));
+			});
 
-bool FMCPParamValidator_ValidateBlueprintNames::RunTest(const FString& Parameters)
-{
-	FString Error;
+			It("a path with a leading dot", [this]()
+			{
+				FString Error;
+				TestFalse(TEXT(".Property"),
+					FMCPParamValidator::ValidatePropertyPath(TEXT(".Property"), Error));
+			});
 
-	// Valid variable names
-	TestTrue("Simple variable should be valid",
-		FMCPParamValidator::ValidateBlueprintVariableName(TEXT("MyVariable"), Error));
-	TestTrue("Variable with underscore should be valid",
-		FMCPParamValidator::ValidateBlueprintVariableName(TEXT("_MyVariable"), Error));
-	TestTrue("Variable with numbers should be valid",
-		FMCPParamValidator::ValidateBlueprintVariableName(TEXT("MyVariable123"), Error));
+			It("a path with a trailing dot", [this]()
+			{
+				FString Error;
+				TestFalse(TEXT("Property."),
+					FMCPParamValidator::ValidatePropertyPath(TEXT("Property."), Error));
+			});
 
-	// Invalid variable names
-	TestFalse("Variable starting with number should be invalid",
-		FMCPParamValidator::ValidateBlueprintVariableName(TEXT("123Variable"), Error));
-	TestFalse("Variable with space should be invalid",
-		FMCPParamValidator::ValidateBlueprintVariableName(TEXT("My Variable"), Error));
-	TestFalse("Variable with special char should be invalid",
-		FMCPParamValidator::ValidateBlueprintVariableName(TEXT("My-Variable"), Error));
-	TestFalse("Empty variable name should be invalid",
-		FMCPParamValidator::ValidateBlueprintVariableName(TEXT(""), Error));
+			It("a path with special characters", [this]()
+			{
+				FString Error;
+				TestFalse(TEXT("Property<T>"),
+					FMCPParamValidator::ValidatePropertyPath(TEXT("Property<T>"), Error));
+			});
+		});
+	});
 
-	// Same rules apply to function names
-	TestTrue("Simple function should be valid",
-		FMCPParamValidator::ValidateBlueprintFunctionName(TEXT("MyFunction"), Error));
-	TestFalse("Function starting with number should be invalid",
-		FMCPParamValidator::ValidateBlueprintFunctionName(TEXT("123Function"), Error));
+	Describe(TEXT("ValidateNumericValue"), [this]()
+	{
+		It("accepts zero", [this]()
+		{
+			FString Error;
+			TestTrue(TEXT("0.0"), FMCPParamValidator::ValidateNumericValue(0.0, TEXT("test"), Error));
+		});
 
-	return true;
+		It("accepts a positive finite value", [this]()
+		{
+			FString Error;
+			TestTrue(TEXT("100.0"), FMCPParamValidator::ValidateNumericValue(100.0, TEXT("test"), Error));
+		});
+
+		It("accepts a negative finite value", [this]()
+		{
+			FString Error;
+			TestTrue(TEXT("-100.0"), FMCPParamValidator::ValidateNumericValue(-100.0, TEXT("test"), Error));
+		});
+
+		It("rejects NaN", [this]()
+		{
+			FString Error;
+			TestFalse(TEXT("NaN"), FMCPParamValidator::ValidateNumericValue(
+				std::numeric_limits<double>::quiet_NaN(), TEXT("test"), Error));
+		});
+
+		It("rejects positive infinity", [this]()
+		{
+			FString Error;
+			TestFalse(TEXT("+Inf"), FMCPParamValidator::ValidateNumericValue(
+				std::numeric_limits<double>::infinity(), TEXT("test"), Error));
+		});
+
+		It("rejects negative infinity", [this]()
+		{
+			FString Error;
+			TestFalse(TEXT("-Inf"), FMCPParamValidator::ValidateNumericValue(
+				-std::numeric_limits<double>::infinity(), TEXT("test"), Error));
+		});
+
+		It("rejects values exceeding the custom max bound", [this]()
+		{
+			FString Error;
+			TestFalse(TEXT("1e10 with max 1e6"),
+				FMCPParamValidator::ValidateNumericValue(1e10, TEXT("test"), Error, 1e6));
+		});
+	});
+
+	Describe(TEXT("SanitizeString"), [this]()
+	{
+		It("strips '<' and '>' but preserves surrounding text", [this]()
+		{
+			const FString Sanitized = FMCPParamValidator::SanitizeString(TEXT("Hello<script>World</script>"));
+			TestFalse(TEXT("contains '<'"), Sanitized.Contains(TEXT("<")));
+			TestFalse(TEXT("contains '>'"), Sanitized.Contains(TEXT(">")));
+			TestTrue(TEXT("preserves 'Hello'"), Sanitized.Contains(TEXT("Hello")));
+			TestTrue(TEXT("preserves 'World'"), Sanitized.Contains(TEXT("World")));
+		});
+
+		It("strips backticks", [this]()
+		{
+			const FString Sanitized = FMCPParamValidator::SanitizeString(TEXT("Hello`rm -rf`World"));
+			TestFalse(TEXT("contains backtick"), Sanitized.Contains(TEXT("`")));
+		});
+
+		It("strips $, (, and )", [this]()
+		{
+			const FString Sanitized = FMCPParamValidator::SanitizeString(TEXT("Hello$(cmd)World"));
+			TestFalse(TEXT("contains '$'"), Sanitized.Contains(TEXT("$")));
+			TestFalse(TEXT("contains '('"), Sanitized.Contains(TEXT("(")));
+			TestFalse(TEXT("contains ')'"), Sanitized.Contains(TEXT(")")));
+		});
+	});
+
+	Describe(TEXT("ValidateBlueprintVariableName"), [this]()
+	{
+		It("accepts a simple identifier", [this]()
+		{
+			FString Error;
+			TestTrue(TEXT("MyVariable"),
+				FMCPParamValidator::ValidateBlueprintVariableName(TEXT("MyVariable"), Error));
+		});
+
+		It("accepts a leading underscore", [this]()
+		{
+			FString Error;
+			TestTrue(TEXT("_MyVariable"),
+				FMCPParamValidator::ValidateBlueprintVariableName(TEXT("_MyVariable"), Error));
+		});
+
+		It("accepts trailing digits", [this]()
+		{
+			FString Error;
+			TestTrue(TEXT("MyVariable123"),
+				FMCPParamValidator::ValidateBlueprintVariableName(TEXT("MyVariable123"), Error));
+		});
+
+		It("rejects a name starting with a digit", [this]()
+		{
+			FString Error;
+			TestFalse(TEXT("123Variable"),
+				FMCPParamValidator::ValidateBlueprintVariableName(TEXT("123Variable"), Error));
+		});
+
+		It("rejects a name with a space", [this]()
+		{
+			FString Error;
+			TestFalse(TEXT("My Variable"),
+				FMCPParamValidator::ValidateBlueprintVariableName(TEXT("My Variable"), Error));
+		});
+
+		It("rejects a name with a dash", [this]()
+		{
+			FString Error;
+			TestFalse(TEXT("My-Variable"),
+				FMCPParamValidator::ValidateBlueprintVariableName(TEXT("My-Variable"), Error));
+		});
+
+		It("rejects an empty name", [this]()
+		{
+			FString Error;
+			TestFalse(TEXT("empty"),
+				FMCPParamValidator::ValidateBlueprintVariableName(TEXT(""), Error));
+		});
+	});
+
+	Describe(TEXT("ValidateBlueprintFunctionName"), [this]()
+	{
+		It("accepts a simple identifier", [this]()
+		{
+			FString Error;
+			TestTrue(TEXT("MyFunction"),
+				FMCPParamValidator::ValidateBlueprintFunctionName(TEXT("MyFunction"), Error));
+		});
+
+		It("rejects a name starting with a digit", [this]()
+		{
+			FString Error;
+			TestFalse(TEXT("123Function"),
+				FMCPParamValidator::ValidateBlueprintFunctionName(TEXT("123Function"), Error));
+		});
+	});
 }
 
 #endif // WITH_DEV_AUTOMATION_TESTS
