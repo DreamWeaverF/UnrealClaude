@@ -1,17 +1,19 @@
-# Unreal Engine Plugin .gitignore
+# Unreal Engine plugin source repository
 
-# Build outputs (but NOT plugin Binaries - those are needed for distribution)
-PackagedPlugin/
-Intermediate/
-DerivedDataCache/
-Build/
-CleanPlugin/
-PluginBuild/
-Tutorials/
+# Local build outputs
+/Binaries/
+/Intermediate/
+/DerivedDataCache/
+/Build/
+/Saved/
+/PackagedPlugin/
+/CleanPlugin/
+/PluginBuild/
+/Tutorials/
 
 # IDE files
-.vs/
-.vscode/
+/.vs/
+/.vscode/
 *.suo
 *.user
 *.sln
@@ -24,25 +26,23 @@ Tutorials/
 *.sdf
 *.cachefile
 
-# Node.js (for MCP bridge)
-# Ignore node_modules everywhere EXCEPT the mcp-bridge (needed for distribution)
-node_modules/
-!UnrealClaude/Resources/mcp-bridge/node_modules/
-npm-debug.log
-yarn-error.log
-# Keep package-lock.json for reproducible builds
-# package-lock.json
+# MCP bridge dependencies and local config
+/Resources/mcp-bridge/node_modules/
+/Resources/mcp-bridge/.git/
+/Resources/mcp-bridge/.env
+/Resources/mcp-bridge/.env.local
+/Resources/mcp-bridge/.env.*.local
+npm-debug.log*
+yarn-error.log*
 
 # Claude Code session data
-.claude/
-CLAUDE.md
+/.claude/
+/CLAUDE.md
 
-# macOS
+# OS files
 .DS_Store
 .AppleDouble
 .LSOverride
-
-# Windows
 Thumbs.db
 ehthumbs.db
 Desktop.ini
@@ -57,8 +57,8 @@ $RECYCLE.BIN/
 *~
 
 # Test artifacts and output
-TestResults/
-AutomationTest/
+/TestResults/
+/AutomationTest/
 **/Saved/Automation/
 **/Saved/Logs/
 *.automation.json
@@ -70,20 +70,11 @@ coverage/
 *.gcda
 *.gcno
 
-# Debug symbols (optional - can include for debugging)
-# *.pdb
-
-# Build intermediates (NOT final binaries)
+# Build intermediates and archives
 *.obj
 *.o
 *.exp
-
-# Archives
 *.zip
 *.rar
 *.7z
 *.tar.gz
-
-# Personal CLAUDE.md (use CLAUDE.md.default as template)
-UnrealClaude/CLAUDE.md
-UnrealClaude/Saved/UnrealClaude/test-output.txt
