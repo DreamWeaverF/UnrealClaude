@@ -6,6 +6,7 @@ public class UnrealClaude : ModuleRules
 {
 	public UnrealClaude(ReadOnlyTargetRules Target) : base(Target)
 	{
+		PublicDefinitions.Add("SkipGlueGeneration=1");
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 		
 		PublicIncludePaths.AddRange(
